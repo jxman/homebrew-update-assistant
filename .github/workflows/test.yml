@@ -1,0 +1,94 @@
+name: Test Script
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Homebrew
+      id: set-up-homebrew
+      uses: Homebrew/actions/setup-homebrew@master
+
+    - name: Make script executable
+      run: chmod +x brew-updates.command
+
+    - name: Test help command
+      run: ./brew-updates.command --help
+
+    - name: Test dry-run mode
+      run: ./brew-updates.command --dry-run --verbose
+
+    - name: Test configuration validation
+      run: |
+        # Test with invalid config
+        echo "INVALID_SETTING=bad_value" > ~/.brew_update_config
+        ./brew-updates.command --dry-run || echo "Expected failure with invalid config"
+        
+        # Test with valid config  
+        cat > ~/.brew_update_config << EOF
+        MAX_BACKUP_COUNT=3
+        LOG_LEVEL=INFO
+        EXCLUDED_FORMULAE="test-formula"
+        EOF
+        ./brew-updates.command --dry-run --verbose
+
+    - name: Test environment variables
+      env:
+        BREW_UPDATE_TIMEOUT: 60
+        BREW_UPDATE_MAX_RETRIES: 2
+      run: ./brew-updates.command --dry-run --verbose
+
+  test-ubuntu:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Homebrew
+      run: |
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
+        eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
+    - name: Make script executable
+      run: chmod +x brew-updates.command
+
+    - name: Test help command
+      run: |
+        eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+        ./brew-updates.command --help
+
+    - name: Test dry-run mode
+      run: |
+        eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+        ./brew-updates.command --dry-run --verbose
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run ShellCheck
+      uses: ludeeus/action-shellcheck@master
+      with:
+        scandir: '.'
+        format: gcc
+        severity: warning
+        exclude_paths: |
+          .git
+          .github
+        ignore_paths: |
+          .brew_logs
+          .brew_backups

@@ -1,0 +1,82 @@
+# Homebrew Update Assistant - .gitignore
+
+# Generated log files and runtime data
+*.log
+*.log.*
+.brew_logs/
+.brew_backups/
+
+# macOS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*~
+.#*
+#*#
+
+# User configuration files (these should not be shared)
+.brew_update_config
+config.local
+.env.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Test files and directories
+test_*.sh
+tests/tmp/
+*.test
+
+# Package manager files (if any)
+node_modules/
+*.tgz
+*.tar.gz
+
+# Runtime and cache directories
+cache/
+tmp/
+
+# Operating system generated files
+*.pid
+*.lock
+
+# Documentation build artifacts
+docs/_build/
+site/
+
+# Personal notes and TODO files (not the project CHANGELOG)
+TODO.txt
+NOTES.txt
+personal_notes.md
+
+# Local development scripts
+dev_*
+local_*
+*.dev
+
+# Certificates and keys (security)
+*.pem
+*.key
+*.crt
+*.csr
+
+# Any local configuration overrides
+local.config
+*.local.conf
