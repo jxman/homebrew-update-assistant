@@ -159,7 +159,10 @@ load_config() {
                     ;;
                 EXCLUDED_FORMULAE|EXCLUDED_CASKS)
                     # Allow space-separated package names with hyphens, slashes, and other common characters
-                    validate_input "$value" '^[a-zA-Z0-9@._/-]*( [a-zA-Z0-9@._/-]*)*$' "package list" && declare -g "$key"="$value"
+                    # Empty string is also valid
+                    if [[ -z "$value" ]] || validate_input "$value" '^[a-zA-Z0-9@._/-]+( [a-zA-Z0-9@._/-]+)*$' "package list"; then
+                        declare -g "$key"="$value"
+                    fi
                     ;;
             esac
         done < "$CONFIG_FILE"
