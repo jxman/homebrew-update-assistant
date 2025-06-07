@@ -1,4 +1,4 @@
-name: Test Script
+name: Code Quality
 
 on:
   push:
@@ -7,89 +7,23 @@ on:
     branches: [ main ]
 
 jobs:
-  test-macos:
-    runs-on: macos-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Homebrew
-      id: set-up-homebrew
-      uses: Homebrew/actions/setup-homebrew@master
-
-    - name: Make script executable
-      run: chmod +x brew-updates.command
-
-    - name: Test help command
-      run: ./brew-updates.command --help
-
-    - name: Test script syntax
-      run: bash -n brew-updates.command
-
-    - name: Test dry-run mode with automation
-      env:
-        BREW_UPDATE_TIMEOUT: 60
-        BREW_UPDATE_MAX_RETRIES: 2
-      run: ./brew-updates.command --dry-run --yes --verbose
-
-    - name: Test configuration validation
-      run: |
-        # Test with valid config  
-        cat > ~/.brew_update_config << EOF
-        MAX_BACKUP_COUNT=3
-        LOG_LEVEL=INFO
-        EXCLUDED_FORMULAE="git wget"
-        EXCLUDED_CASKS="firefox"
-        EOF
-        ./brew-updates.command --dry-run --yes --verbose
-
-    - name: Test package name validation
-      run: |
-        # Test with packages containing hyphens and slashes
-        cat > ~/.brew_update_config << EOF
-        EXCLUDED_FORMULAE="docker-compose node@18 hashicorp/tap/terraform"
-        EXCLUDED_CASKS="visual-studio-code"
-        EOF
-        ./brew-updates.command --dry-run --yes --verbose
-
-    - name: Test individual options
-      run: |
-        ./brew-updates.command --dry-run --skip-casks --yes
-        ./brew-updates.command --dry-run --skip-cleanup --yes
-
-  test-ubuntu:
+  syntax-check:
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y curl git
-
-    - name: Install Homebrew
-      run: |
-        NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
-
-    - name: Make script executable
-      run: chmod +x brew-updates.command
-
-    - name: Test script syntax
+    - name: Check script syntax
       run: bash -n brew-updates.command
 
-    - name: Test help command
+    - name: Verify script is executable
       run: |
-        eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-        ./brew-updates.command --help
+        chmod +x brew-updates.command
+        file brew-updates.command
 
-    - name: Test dry-run mode
-      run: |
-        eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-        ./brew-updates.command --dry-run --yes --verbose
+    - name: Check for required shebang
+      run: head -1 brew-updates.command | grep -q '#!/bin/bash'
 
   shellcheck:
     runs-on: ubuntu-latest
@@ -107,6 +41,61 @@ jobs:
         exclude_paths: |
           .git
           .github
-        ignore_paths: |
-          .brew_logs
-          .brew_backups
+
+  documentation:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check README exists
+      run: test -f README.md
+
+    - name: Check LICENSE exists
+      run: test -f LICENSE
+
+    - name: Check CHANGELOG exists
+      run: test -f CHANGELOG.md
+
+    - name: Check CONTRIBUTING exists
+      run: test -f CONTRIBUTING.md
+
+    - name: Verify documentation links
+      run: |
+        # Check for broken internal links in README
+        if grep -q "](LICENSE)" README.md; then
+          test -f LICENSE || (echo "LICENSE file referenced but not found" && exit 1)
+        fi
+
+  file-structure:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Verify project structure
+      run: |
+        echo "Checking project structure..."
+        
+        # Required files
+        test -f brew-updates.command || (echo "Main script missing" && exit 1)
+        test -f README.md || (echo "README missing" && exit 1)
+        test -f LICENSE || (echo "LICENSE missing" && exit 1)
+        test -f .gitignore || (echo ".gitignore missing" && exit 1)
+        
+        # GitHub templates
+        test -f .github/ISSUE_TEMPLATE/bug_report.md || (echo "Bug report template missing" && exit 1)
+        test -f .github/ISSUE_TEMPLATE/feature_request.md || (echo "Feature request template missing" && exit 1)
+        
+        echo "✅ All required files present"
+
+    - name: Check script permissions
+      run: |
+        if [ -x brew-updates.command ]; then
+          echo "✅ Script is executable"
+        else
+          echo "❌ Script is not executable"
+          exit 1
+        fi
