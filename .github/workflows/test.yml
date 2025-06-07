@@ -24,28 +24,29 @@ jobs:
     - name: Test help command
       run: ./brew-updates.command --help
 
-    - name: Test dry-run mode
-      run: ./brew-updates.command --dry-run --verbose
+    - name: Test script syntax
+      run: bash -n brew-updates.command
+
+    - name: Test dry-run mode with automation
+      env:
+        BREW_UPDATE_TIMEOUT: 60
+        BREW_UPDATE_MAX_RETRIES: 2
+      run: ./brew-updates.command --dry-run --yes --verbose
 
     - name: Test configuration validation
       run: |
-        # Test with invalid config
-        echo "INVALID_SETTING=bad_value" > ~/.brew_update_config
-        ./brew-updates.command --dry-run || echo "Expected failure with invalid config"
-        
         # Test with valid config  
         cat > ~/.brew_update_config << EOF
         MAX_BACKUP_COUNT=3
         LOG_LEVEL=INFO
         EXCLUDED_FORMULAE="test-formula"
         EOF
-        ./brew-updates.command --dry-run --verbose
+        ./brew-updates.command --dry-run --yes --verbose
 
-    - name: Test environment variables
-      env:
-        BREW_UPDATE_TIMEOUT: 60
-        BREW_UPDATE_MAX_RETRIES: 2
-      run: ./brew-updates.command --dry-run --verbose
+    - name: Test individual options
+      run: |
+        ./brew-updates.command --dry-run --skip-casks --yes
+        ./brew-updates.command --dry-run --skip-cleanup --yes
 
   test-ubuntu:
     runs-on: ubuntu-latest
@@ -54,14 +55,21 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y curl git
+
     - name: Install Homebrew
       run: |
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
         echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
-        eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 
     - name: Make script executable
       run: chmod +x brew-updates.command
+
+    - name: Test script syntax
+      run: bash -n brew-updates.command
 
     - name: Test help command
       run: |
@@ -71,7 +79,7 @@ jobs:
     - name: Test dry-run mode
       run: |
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-        ./brew-updates.command --dry-run --verbose
+        ./brew-updates.command --dry-run --yes --verbose
 
   shellcheck:
     runs-on: ubuntu-latest

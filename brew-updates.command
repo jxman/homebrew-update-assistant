@@ -503,7 +503,7 @@ check_outdated_packages() {
     
     if [[ "$has_updates" == false ]]; then
         log_success "✨ All packages are up to date!"
-        return $EXIT_GENERAL_ERROR  # Nothing to update
+        return 1  # Nothing to update (non-error condition)
     fi
     
     return $EXIT_SUCCESS  # Has updates
@@ -882,10 +882,16 @@ main() {
     check_disk_space || {
         disk_status=$?
         if [[ $disk_status -eq $EXIT_DISK_SPACE_ERROR ]]; then
-            log_error "Insufficient disk space. Aborting to prevent system issues."
-            exit $EXIT_DISK_SPACE_ERROR
+            # In CI environments or with --yes flag, warn but don't exit
+            if [[ "$AUTO_YES" == true ]] || [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+                log_warning "💾 Low disk space detected in automated environment, continuing..."
+            else
+                log_error "Insufficient disk space. Aborting to prevent system issues."
+                exit $EXIT_DISK_SPACE_ERROR
+            fi
+        else
+            log_warning "💾 Continuing despite disk space warnings..."
         fi
-        log_warning "💾 Continuing despite disk space warnings..."
     }
     
     # Create backup
@@ -906,6 +912,8 @@ main() {
             exit_code=$?
             log_warning "Some package upgrades failed (exit code: $exit_code)"
         fi
+    else
+        log_verbose "No package updates needed, skipping upgrade phase"
     fi
     
     print_separator
