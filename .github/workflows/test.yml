@@ -39,7 +39,17 @@ jobs:
         cat > ~/.brew_update_config << EOF
         MAX_BACKUP_COUNT=3
         LOG_LEVEL=INFO
-        EXCLUDED_FORMULAE="test-formula"
+        EXCLUDED_FORMULAE="git wget"
+        EXCLUDED_CASKS="firefox"
+        EOF
+        ./brew-updates.command --dry-run --yes --verbose
+
+    - name: Test package name validation
+      run: |
+        # Test with packages containing hyphens and slashes
+        cat > ~/.brew_update_config << EOF
+        EXCLUDED_FORMULAE="docker-compose node@18 hashicorp/tap/terraform"
+        EXCLUDED_CASKS="visual-studio-code"
         EOF
         ./brew-updates.command --dry-run --yes --verbose
 

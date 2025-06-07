@@ -91,7 +91,14 @@ print_separator() {
 log_message() {
     local level=${2:-INFO}
     local message="[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $1"
-    echo "$message" | tee -a "$LOG_FILE"
+    
+    # Ensure log directory exists before writing
+    if [[ -n "${LOG_FILE:-}" ]]; then
+        mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null
+        echo "$message" | tee -a "$LOG_FILE" 2>/dev/null || echo "$message"
+    else
+        echo "$message"
+    fi
 }
 
 log_verbose() {
@@ -151,8 +158,8 @@ load_config() {
                     validate_input "$value" '^(DEBUG|INFO|WARNING|ERROR)$' "log level" && LOG_LEVEL="$value"
                     ;;
                 EXCLUDED_FORMULAE|EXCLUDED_CASKS)
-                    # Allow space-separated package names
-                    validate_input "$value" '^[a-zA-Z0-9@._-]*( [a-zA-Z0-9@._-]*)*$' "package list" && declare -g "$key"="$value"
+                    # Allow space-separated package names with hyphens, slashes, and other common characters
+                    validate_input "$value" '^[a-zA-Z0-9@._/-]*( [a-zA-Z0-9@._/-]*)*$' "package list" && declare -g "$key"="$value"
                     ;;
             esac
         done < "$CONFIG_FILE"
@@ -854,14 +861,14 @@ show_final_summary() {
 main() {
     local exit_code=$EXIT_SUCCESS
     
-    # Load configuration first
-    load_config
-    
-    # Parse command line arguments
+    # Parse command line arguments first (needed for setup)
     parse_arguments "$@"
     
     print_header
     setup_directories
+    
+    # Load configuration after directories are created
+    load_config
     
     # Pre-flight checks
     check_homebrew
