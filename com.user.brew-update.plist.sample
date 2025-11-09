@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Unique identifier for this LaunchAgent -->
+    <key>Label</key>
+    <string>com.user.brew-update</string>
+
+    <!-- Path to script and arguments -->
+    <!-- IMPORTANT: Update USERNAME to your actual username -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/USERNAME/bin/brew-updates.command</string>
+        <string>--yes</string>
+        <string>--verbose</string>
+    </array>
+
+    <!-- Environment variables for Homebrew -->
+    <!-- IMPORTANT: Update USERNAME and verify PATH includes your Homebrew location -->
+    <!-- Apple Silicon Macs: /opt/homebrew/bin (default below) -->
+    <!-- Intel Macs: /usr/local/bin -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/USERNAME</string>
+        <!-- Enable macOS notifications (set to false to disable) -->
+        <key>ENABLE_NOTIFICATIONS</key>
+        <string>true</string>
+    </dict>
+
+    <!-- Schedule: Every Monday at 9:00 AM -->
+    <!-- Customize the schedule by changing Weekday (0=Sunday, 1=Monday, etc.), Hour, and Minute -->
+    <!-- Remove Weekday key to run daily -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>1</integer>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!-- Log output to brew logs directory -->
+    <!-- IMPORTANT: Update USERNAME to your actual username -->
+    <key>StandardOutPath</key>
+    <string>/Users/USERNAME/.brew_logs/launchagent.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/USERNAME/.brew_logs/launchagent_error.log</string>
+
+    <!-- Run even if previous instance failed -->
+    <key>SuccessfulExit</key>
+    <false/>
+
+    <!-- Don't throttle if it runs frequently -->
+    <key>ThrottleInterval</key>
+    <integer>0</integer>
+</dict>
+</plist>

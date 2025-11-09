@@ -46,12 +46,15 @@ SKIP_CLEANUP=false
 # Configuration variables
 BACKUP_RETENTION_DAYS=30
 MAX_BACKUP_COUNT=5
+LOG_RETENTION_DAYS=30
 AUTO_UPGRADE=false
 SKIP_CASKS_BY_DEFAULT=false
 CLEANUP_BY_DEFAULT=true
 LOG_LEVEL="INFO"
 EXCLUDED_FORMULAE=""
 EXCLUDED_CASKS=""
+# Check environment variable first, then default to false
+ENABLE_NOTIFICATIONS="${ENABLE_NOTIFICATIONS:-false}"
 
 ###################
 # Error Handling
@@ -122,6 +125,38 @@ log_success() {
     log_message "$1" "SUCCESS"
 }
 
+send_notification() {
+    local title="$1"
+    local message="$2"
+    local sound="${3:-default}"
+
+    # Only send notifications if ENABLE_NOTIFICATIONS is true
+    if [[ "${ENABLE_NOTIFICATIONS:-false}" != "true" ]]; then
+        log_verbose "Notifications disabled (ENABLE_NOTIFICATIONS=${ENABLE_NOTIFICATIONS:-false})"
+        return 0
+    fi
+
+    log_verbose "Sending notification: $title - $message"
+
+    # Try terminal-notifier first (supports click actions to open log folder)
+    # Use full path to ensure it works in LaunchAgent environment
+    if /opt/homebrew/bin/terminal-notifier -title "$title" -message "$message" -sound "$sound" \
+        -execute "open '${LOG_DIR}'" 2>/dev/null; then
+        log_verbose "Notification sent successfully via terminal-notifier (clickable)"
+        return 0
+    fi
+
+    # Fallback to osascript (works but not clickable)
+    if command -v osascript &> /dev/null; then
+        if osascript -e "display notification \"$message\" with title \"$title\" sound name \"$sound\"" 2>/dev/null; then
+            log_verbose "Notification sent successfully via osascript (non-clickable)"
+            return 0
+        else
+            log_verbose "Notification via osascript failed"
+        fi
+    fi
+}
+
 validate_input() {
     local input="$1"
     local pattern="$2"
@@ -151,7 +186,10 @@ load_config() {
                 MAX_BACKUP_COUNT)
                     validate_input "$value" '^[0-9]+$' "max backup count" && MAX_BACKUP_COUNT="$value"
                     ;;
-                AUTO_UPGRADE|SKIP_CASKS_BY_DEFAULT|CLEANUP_BY_DEFAULT)
+                LOG_RETENTION_DAYS)
+                    validate_input "$value" '^[0-9]+$' "log retention days" && LOG_RETENTION_DAYS="$value"
+                    ;;
+                AUTO_UPGRADE|SKIP_CASKS_BY_DEFAULT|CLEANUP_BY_DEFAULT|ENABLE_NOTIFICATIONS)
                     validate_input "$value" '^(true|false)$' "boolean value" && declare -g "$key"="$value"
                     ;;
                 LOG_LEVEL)
@@ -255,6 +293,9 @@ parse_arguments() {
 setup_directories() {
     mkdir -p "$BACKUP_DIR" "$LOG_DIR"
     log_verbose "Created directories: $BACKUP_DIR, $LOG_DIR"
+
+    # Clean up old logs (after directories exist)
+    cleanup_old_logs
 }
 
 check_homebrew() {
@@ -354,7 +395,7 @@ create_backup() {
 cleanup_old_backups() {
     local backup_count
     backup_count=$(find "$BACKUP_DIR" -name "brew_backup_*" -type f 2>/dev/null | wc -l | tr -d ' ')
-    
+
     if [[ "$backup_count" -gt "$MAX_BACKUP_COUNT" ]]; then
         log_verbose "Cleaning up old backups (keeping last $MAX_BACKUP_COUNT)..."
         # Safer approach: get files, sort by modification time, remove oldest
@@ -362,6 +403,27 @@ cleanup_old_backups() {
             xargs -0 ls -t 2>/dev/null | \
             tail -n +$((MAX_BACKUP_COUNT + 1)) | \
             xargs rm -f 2>/dev/null || log_warning "Failed to clean some old backups"
+    fi
+}
+
+cleanup_old_logs() {
+    log_verbose "Cleaning up logs older than $LOG_RETENTION_DAYS days..."
+
+    # Find and remove log files older than LOG_RETENTION_DAYS
+    local deleted_count=0
+
+    # Find log files older than retention period
+    while IFS= read -r -d '' logfile; do
+        if rm -f "$logfile" 2>/dev/null; then
+            ((deleted_count++))
+            log_verbose "Deleted old log: $(basename "$logfile")"
+        fi
+    done < <(find "$LOG_DIR" -name "brew_update_*.log*" -type f -mtime +$LOG_RETENTION_DAYS -print0 2>/dev/null)
+
+    if [[ $deleted_count -gt 0 ]]; then
+        log_verbose "Cleaned up $deleted_count old log file(s)"
+    else
+        log_verbose "No old logs to clean up"
     fi
 }
 
@@ -513,9 +575,19 @@ check_outdated_packages() {
     
     if [[ "$has_updates" == false ]]; then
         log_success "✨ All packages are up to date!"
+        send_notification "Homebrew Update" "All packages are up to date!" "Blow"
         return 1  # Nothing to update (non-error condition)
     fi
-    
+
+    # Count total updates
+    local formula_count=0
+    local cask_count=0
+    [[ -n "$outdated_formulae" ]] && formula_count=$(echo "$outdated_formulae" | wc -l | tr -d ' ')
+    [[ -n "$outdated_casks" ]] && cask_count=$(echo "$outdated_casks" | wc -l | tr -d ' ')
+    local total_updates=$((formula_count + cask_count))
+
+    send_notification "Homebrew Update" "📦 $total_updates package(s) available for update" "Purr"
+
     return $EXIT_SUCCESS  # Has updates
 }
 
@@ -596,42 +668,44 @@ parse_doctor_output() {
     fi
     
     # Check for common warning patterns
-    if grep -q "Warning:" "$doctor_file"; then
+    if grep -q "Warning:" "$doctor_file" 2>/dev/null; then
         has_warnings=true
         echo -e "\n${YELLOW}📋 Homebrew Doctor Warnings:${NC}"
-        
+
         # Extract and summarize key warnings with helpful context
-        if grep -q "formulae have the same name as core formulae" "$doctor_file"; then
+        if grep -q "formulae have the same name as core formulae" "$doctor_file" 2>/dev/null; then
             echo "  • Formula naming conflicts detected"
             echo "    ${BLUE}ℹ️  Use full tap names (e.g., 'hashicorp/tap/terraform' instead of 'terraform')${NC}"
         fi
-        
-        if grep -q "outdated" "$doctor_file"; then
+
+        if grep -q "outdated" "$doctor_file" 2>/dev/null; then
             echo "  • Some packages may be outdated"
             echo "    ${BLUE}ℹ️  This script should have updated them automatically${NC}"
         fi
-        
-        if grep -q "cask" "$doctor_file"; then
+
+        if grep -q "cask" "$doctor_file" 2>/dev/null; then
             echo "  • Cask-related warnings found"
             echo "    ${BLUE}ℹ️  Usually safe to ignore unless specific casks aren't working${NC}"
         fi
-        
-        if grep -q "link" "$doctor_file"; then
+
+        if grep -q "link" "$doctor_file" 2>/dev/null; then
             echo "  • Linking issues detected"
             echo "    ${BLUE}ℹ️  Run 'brew link --overwrite <formula>' to fix if needed${NC}"
         fi
-        
-        if grep -q "just used to help.*maintainers" "$doctor_file"; then
+
+        if grep -q "just used to help.*maintainers" "$doctor_file" 2>/dev/null; then
             echo "  • ${GREEN}Note: Homebrew says these warnings are informational only${NC}"
             echo "    ${BLUE}ℹ️  Safe to ignore if everything works fine${NC}"
         fi
     fi
     
     # Check for actual errors (not just warnings)
-    if grep -qE "(Error:|error:|failed)" "$doctor_file" && ! grep -q "just used to help" "$doctor_file"; then
-        has_errors=true
-        echo -e "\n${RED}❌ Homebrew Doctor Errors:${NC}"
-        grep -E "(Error:|error:|failed)" "$doctor_file" | head -3 | sed 's/^/  • /'
+    if grep -qE "(Error:|error:|failed)" "$doctor_file" 2>/dev/null; then
+        if ! grep -q "just used to help" "$doctor_file" 2>/dev/null; then
+            has_errors=true
+            echo -e "\n${RED}❌ Homebrew Doctor Errors:${NC}"
+            grep -E "(Error:|error:|failed)" "$doctor_file" 2>/dev/null | head -3 | sed 's/^/  • /' || true
+        fi
     fi
     
     # Show summary
@@ -646,8 +720,9 @@ parse_doctor_output() {
 
 run_doctor() {
     log_message "🏥 Running Homebrew doctor..."
-    
-    local doctor_file="${LOG_FILE}.doctor"
+
+    # Use .doctor.log extension so it opens in console viewer
+    local doctor_file="${LOG_FILE%.log}.doctor.log"
     local doctor_exit_code
     
     # Run brew doctor and capture exit code
@@ -659,8 +734,8 @@ run_doctor() {
     
     # Parse the output for meaningful information
     local parse_result
-    parse_doctor_output "$doctor_file"
-    parse_result=$?
+    parse_doctor_output "$doctor_file" || parse_result=$?
+    parse_result=${parse_result:-0}
     
     case $parse_result in
         0)
@@ -678,8 +753,10 @@ run_doctor() {
             fi
             ;;
     esac
-    
-    return $doctor_exit_code
+
+    # Always return success - doctor warnings/errors are informational only
+    # The script should continue even if doctor finds issues
+    return $EXIT_SUCCESS
 }
 
 cleanup_homebrew() {
@@ -788,7 +865,7 @@ show_file_links() {
     create_clickable_link "$LOG_FILE"
     
     # Doctor report if it exists
-    local doctor_file="${LOG_FILE}.doctor"
+    local doctor_file="${LOG_FILE%.log}.doctor.log"
     if [[ -f "$doctor_file" ]]; then
         echo -n "  🏥 Doctor Report: "
         create_clickable_link "$doctor_file"
@@ -809,8 +886,8 @@ show_file_links() {
     # Add interactive commands for quick access
     echo -e "\n${YELLOW}💡 Quick Commands (copy & paste):${NC}"
     echo -e "  ${GREEN}open \"$LOG_FILE\"${NC}  # Open main log"
-    if [[ -f "${LOG_FILE}.doctor" ]]; then
-        echo -e "  ${GREEN}open \"${LOG_FILE}.doctor\"${NC}  # Open doctor report"
+    if [[ -f "${LOG_FILE%.log}.doctor.log" ]]; then
+        echo -e "  ${GREEN}open \"${LOG_FILE%.log}.doctor.log\"${NC}  # Open doctor report"
     fi
     echo -e "  ${GREEN}open \"$BACKUP_FILE\"${NC}  # Open backup file"
     echo -e "  ${GREEN}open \"$LOG_DIR\"${NC}  # Open log directory"
@@ -872,7 +949,10 @@ main() {
     
     # Load configuration after directories are created
     load_config
-    
+
+    # Send start notification
+    send_notification "Homebrew Update" "Starting Homebrew update process..." "Submarine"
+
     # Pre-flight checks
     check_homebrew
     check_prerequisites
@@ -936,7 +1016,14 @@ main() {
     
     # Summary
     show_final_summary
-    
+
+    # Send completion notification
+    if [[ $exit_code -eq 0 ]]; then
+        send_notification "Homebrew Update" "✅ Update completed successfully!" "Glass"
+    else
+        send_notification "Homebrew Update" "⚠️ Update completed with warnings (code: $exit_code)" "Basso"
+    fi
+
     exit "$exit_code"
 }
 

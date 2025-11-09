@@ -27,6 +27,9 @@ Thumbs.db
 config.local
 .env.local
 
+# User-specific LaunchAgent plist (use .sample file as template)
+com.user.brew-update.plist
+
 # IDE and editor files
 .vscode/
 .idea/
@@ -80,3 +83,5 @@ local_*
 # Any local configuration overrides
 local.config
 *.local.conf
+# Snyk Security Extension - AI Rules (auto-generated)
+.github/instructions/snyk_rules.instructions.md

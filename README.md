@@ -168,6 +168,9 @@ Create `~/.brew_update_config` to customize behavior:
 BACKUP_RETENTION_DAYS=30
 MAX_BACKUP_COUNT=10
 
+# Log retention
+LOG_RETENTION_DAYS=30  # Auto-delete logs older than this
+
 # Update preferences
 AUTO_UPGRADE=false
 SKIP_CASKS_BY_DEFAULT=false
@@ -175,6 +178,9 @@ CLEANUP_BY_DEFAULT=true
 
 # Logging
 LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
+
+# Notifications (macOS only)
+ENABLE_NOTIFICATIONS=true  # Enable macOS notification center alerts
 
 # Package exclusions (space-separated)
 EXCLUDED_FORMULAE="php@7.4 node@14 python@3.9"
@@ -188,6 +194,7 @@ EXCLUDED_CASKS="docker-desktop virtualbox"
 | `BREW_UPDATE_TIMEOUT` | Command timeout in seconds | 300 |
 | `BREW_UPDATE_MAX_RETRIES` | Maximum retry attempts | 3 |
 | `BREW_UPDATE_DEBUG` | Enable debug mode | false |
+| `ENABLE_NOTIFICATIONS` | Show macOS notifications (LaunchAgent) | false |
 
 ```bash
 # Example usage with environment variables
@@ -220,17 +227,89 @@ chmod +x brew-updates
 ./brew-updates
 ```
 
+### 🔔 Notifications (macOS)
+
+Get real-time notifications when using LaunchAgent automation!
+
+**Features:**
+- 🚀 **Start notification**: Alerts when the update process begins
+- 📦 **Update available**: Shows count of packages ready for update
+- ✅ **Success notification**: Confirms successful completion
+- ⚠️ **Warning notification**: Alerts if issues occurred
+- ✨ **Up-to-date notification**: Confirms all packages are current
+- 🖱️ **Clickable notifications**: Click to open log folder (requires `terminal-notifier`)
+
+**How to Enable:**
+
+1. **Via LaunchAgent** (recommended for automation):
+   - The sample plist includes `ENABLE_NOTIFICATIONS=true` by default
+   - Notifications will appear in macOS Notification Center
+   - No additional setup required
+
+2. **Enable Clickable Notifications** (optional):
+   ```bash
+   brew install terminal-notifier
+   # Now clicking notifications will open the log folder
+   ```
+
+3. **Via Configuration File**:
+   ```bash
+   # Add to ~/.brew_update_config
+   ENABLE_NOTIFICATIONS=true
+   ```
+
+4. **Via Environment Variable**:
+   ```bash
+   export ENABLE_NOTIFICATIONS=true
+   ./brew-updates.command --yes
+   ```
+
+**Notification Examples:**
+- 🔵 "Homebrew Update - Starting Homebrew update process..."
+- 📦 "Homebrew Update - 5 package(s) available for update"
+- ✅ "Homebrew Update - Update completed successfully!"
+- ✨ "Homebrew Update - All packages are up to date!"
+
+**Customization:**
+Notifications use native macOS sounds:
+- Start: "Submarine" (gentle alert)
+- Updates available: "Purr" (notification)
+- Success: "Glass" (completion)
+- Up-to-date: "Blow" (light chime)
+- Warning: "Basso" (error tone)
+
+**Troubleshooting:**
+- Ensure System Settings → Notifications → Script Editor (or terminal-notifier) is enabled
+- Check "Do Not Disturb" mode is not blocking notifications
+- Verify `ENABLE_NOTIFICATIONS=true` is set in your environment
+- If notifications aren't clickable, install `terminal-notifier`: `brew install terminal-notifier`
+
 ## 📁 File Locations & Structure
 
 ### Generated Files
 ```
 ~/.brew_logs/                          # Log directory
 ├── brew_update_YYYYMMDD_HHMMSS.log   # Main execution log
-└── brew_update_YYYYMMDD_HHMMSS.log.doctor  # Homebrew doctor report
+├── brew_update_YYYYMMDD_HHMMSS.doctor.log  # Homebrew doctor report
+└── launchagent.log                   # LaunchAgent execution log (if enabled)
 
 ~/.brew_backups/                       # Backup directory
 ├── brew_backup_YYYYMMDD_HHMMSS       # Brewfile backups
 └── ...                               # (automatic rotation)
+```
+
+### Automatic Cleanup
+The script automatically manages disk space:
+- **Logs**: Automatically deleted after 30 days (configurable via `LOG_RETENTION_DAYS`)
+- **Backups**: Keeps last 5 backups by default (configurable via `MAX_BACKUP_COUNT`)
+- **Cleanup runs**: Every time the script executes
+
+**Customize retention periods:**
+```bash
+# In ~/.brew_update_config
+LOG_RETENTION_DAYS=60    # Keep logs for 60 days
+BACKUP_RETENTION_DAYS=30 # Still used for display purposes
+MAX_BACKUP_COUNT=10      # Keep last 10 backups
 ```
 
 ### Clickable File Access
@@ -239,49 +318,132 @@ The script provides clickable links for:
 - 🏥 **Doctor reports** (health analysis)
 - 💾 **Backup files** (restore points)
 - 📂 **Directory access** (browse all files)
+- 🔔 **Notification click** (opens log folder directly)
 
 ## 🔧 Advanced Features
 
 ### Automation Setup
 
-**Cron Job Example:**
+#### Option 1: macOS LaunchAgent (Recommended for macOS)
+
+LaunchAgents provide native macOS scheduling with better reliability than cron. They automatically catch up on missed runs if your Mac was asleep.
+
+**Quick Setup:**
+```bash
+# 1. Copy the script to a user-accessible location
+mkdir -p ~/bin
+cp brew-updates.command ~/bin/
+chmod +x ~/bin/brew-updates.command
+
+# 2. Copy the sample plist and customize it
+cp com.user.brew-update.plist.sample com.user.brew-update.plist
+
+# 3. Edit the plist file and update paths
+# - Update USERNAME to your actual username
+# - Update SCHEDULE if you want different timing
+# - Verify the PATH includes Homebrew location
+
+# 4. Install the LaunchAgent
+cp com.user.brew-update.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.user.brew-update.plist
+
+# 5. Test immediately (don't wait for schedule)
+launchctl start com.user.brew-update
+
+# 6. Check the logs
+tail -f ~/.brew_logs/launchagent.log
+```
+
+**Managing LaunchAgent:**
+```bash
+# Check status
+launchctl list | grep brew-update
+
+# View logs
+tail -50 ~/.brew_logs/launchagent.log          # Standard output
+tail -50 ~/.brew_logs/launchagent_error.log    # Errors only
+
+# Stop the LaunchAgent
+launchctl unload ~/Library/LaunchAgents/com.user.brew-update.plist
+
+# Restart after configuration changes
+launchctl unload ~/Library/LaunchAgents/com.user.brew-update.plist
+launchctl load ~/Library/LaunchAgents/com.user.brew-update.plist
+```
+
+**Customizing Schedule:**
+
+The included sample runs every Monday at 9:00 AM. To customize:
+
+```xml
+<!-- Daily at 3:00 AM -->
+<key>StartCalendarInterval</key>
+<dict>
+    <key>Hour</key>
+    <integer>3</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+</dict>
+
+<!-- Every Sunday at noon -->
+<key>StartCalendarInterval</key>
+<dict>
+    <key>Weekday</key>
+    <integer>0</integer>  <!-- 0=Sunday, 1=Monday, ..., 6=Saturday -->
+    <key>Hour</key>
+    <integer>12</integer>
+</dict>
+
+<!-- Multiple times per week -->
+<key>StartCalendarInterval</key>
+<array>
+    <dict>
+        <key>Weekday</key>
+        <integer>1</integer>  <!-- Monday -->
+        <key>Hour</key>
+        <integer>9</integer>
+    </dict>
+    <dict>
+        <key>Weekday</key>
+        <integer>5</integer>  <!-- Friday -->
+        <key>Hour</key>
+        <integer>17</integer>
+    </dict>
+</array>
+```
+
+**Important Notes:**
+- The script copy in `~/bin/` is what LaunchAgent will run
+- If you update the original script, remember to copy it to `~/bin/` again
+- LaunchAgent runs in a minimal environment - PATH is set in the plist
+- Logs go to `~/.brew_logs/launchagent.log` and `launchagent_error.log`
+- **Notifications enabled by default** - Get macOS alerts for update status (see [Notifications section](#-notifications-macos))
+
+#### Option 2: Cron Job (macOS/Linux)
+
+**Note for macOS users:** On modern macOS, cron requires Full Disk Access permission and LaunchAgents are the recommended approach. Use cron for Linux or if you prefer traditional scheduling.
+
 ```bash
 # Edit crontab
 crontab -e
 
 # Add weekly updates (Monday 9 AM)
 0 9 * * 1 /usr/local/bin/brew-updates --yes --verbose >> ~/brew_auto.log 2>&1
+
+# Or use the full path if not installed system-wide
+0 9 * * 1 /path/to/brew-updates.command --yes --verbose >> ~/brew_auto.log 2>&1
 ```
 
-**LaunchAgent (macOS):**
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.user.brew-update</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/path/to/brew-updates.command</string>
-        <string>--yes</string>
-        <string>--verbose</string>
-    </array>
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Weekday</key>
-        <integer>1</integer>
-        <key>Hour</key>
-        <integer>9</integer>
-        <key>Minute</key>
-        <integer>0</integer>
-    </dict>
-    <key>StandardOutPath</key>
-    <string>/Users/username/brew_update.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Users/username/brew_update.log</string>
-</dict>
-</plist>
+**Cron Schedule Examples:**
+```bash
+# Daily at 3 AM
+0 3 * * * /usr/local/bin/brew-updates --yes
+
+# Every Sunday at midnight
+0 0 * * 0 /usr/local/bin/brew-updates --yes
+
+# Twice per week (Monday and Friday at 9 AM)
+0 9 * * 1,5 /usr/local/bin/brew-updates --yes
 ```
 
 ### Integration Ideas
