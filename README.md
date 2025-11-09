@@ -154,16 +154,18 @@ The Homebrew Update Assistant follows a modular, pipeline-based architecture wit
               │  - File locations      │
               │  - Quick commands      │
               └────────────────────────┘
-
-                    Output Files:
-    ┌──────────────────────────────────────────┐
-    │  ~/.brew_logs/                           │
-    │  ├── brew_update_YYYYMMDD_HHMMSS.log    │
-    │  └── brew_update_YYYYMMDD_HHMMSS.doctor.log │
-    │                                          │
-    │  ~/.brew_backups/                        │
-    │  └── brew_backup_YYYYMMDD_HHMMSS        │
-    └──────────────────────────────────────────┘
+                           │
+                           ▼
+┌───────────────────────────────────────────────────────────────────┐
+│                         Output Files                              │
+├───────────────────────────────────────────────────────────────────┤
+│  ~/.brew_logs/                                                    │
+│  ├── brew_update_YYYYMMDD_HHMMSS.log                            │
+│  └── brew_update_YYYYMMDD_HHMMSS.doctor.log                     │
+│                                                                   │
+│  ~/.brew_backups/                                                 │
+│  └── brew_backup_YYYYMMDD_HHMMSS                                │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Components
