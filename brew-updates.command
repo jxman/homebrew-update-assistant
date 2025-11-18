@@ -42,6 +42,7 @@ VERBOSE=false
 AUTO_YES=false
 SKIP_CASKS=false
 SKIP_CLEANUP=false
+SKIP_SECURITY_SCAN=false
 
 # Configuration variables
 BACKUP_RETENTION_DAYS=30
@@ -55,6 +56,8 @@ EXCLUDED_FORMULAE=""
 EXCLUDED_CASKS=""
 # Check environment variable first, then default to false
 ENABLE_NOTIFICATIONS="${ENABLE_NOTIFICATIONS:-false}"
+SECURITY_SCAN_ENABLED=false
+SECURITY_SCAN_SEVERITY="HIGH,CRITICAL"
 
 ###################
 # Error Handling
@@ -189,17 +192,38 @@ load_config() {
                 LOG_RETENTION_DAYS)
                     validate_input "$value" '^[0-9]+$' "log retention days" && LOG_RETENTION_DAYS="$value"
                     ;;
-                AUTO_UPGRADE|SKIP_CASKS_BY_DEFAULT|CLEANUP_BY_DEFAULT|ENABLE_NOTIFICATIONS)
-                    validate_input "$value" '^(true|false)$' "boolean value" && declare -g "$key"="$value"
+                AUTO_UPGRADE)
+                    validate_input "$value" '^(true|false)$' "boolean value" && AUTO_UPGRADE="$value"
+                    ;;
+                SKIP_CASKS_BY_DEFAULT)
+                    validate_input "$value" '^(true|false)$' "boolean value" && SKIP_CASKS_BY_DEFAULT="$value"
+                    ;;
+                CLEANUP_BY_DEFAULT)
+                    validate_input "$value" '^(true|false)$' "boolean value" && CLEANUP_BY_DEFAULT="$value"
+                    ;;
+                ENABLE_NOTIFICATIONS)
+                    validate_input "$value" '^(true|false)$' "boolean value" && ENABLE_NOTIFICATIONS="$value"
+                    ;;
+                SECURITY_SCAN_ENABLED)
+                    validate_input "$value" '^(true|false)$' "boolean value" && SECURITY_SCAN_ENABLED="$value"
                     ;;
                 LOG_LEVEL)
                     validate_input "$value" '^(DEBUG|INFO|WARNING|ERROR)$' "log level" && LOG_LEVEL="$value"
                     ;;
-                EXCLUDED_FORMULAE|EXCLUDED_CASKS)
+                SECURITY_SCAN_SEVERITY)
+                    # Allow comma-separated severity levels
+                    validate_input "$value" '^(LOW|MEDIUM|HIGH|CRITICAL)(,(LOW|MEDIUM|HIGH|CRITICAL))*$' "security scan severity" && SECURITY_SCAN_SEVERITY="$value"
+                    ;;
+                EXCLUDED_FORMULAE)
                     # Allow space-separated package names with hyphens, slashes, and other common characters
                     # Empty string is also valid
                     if [[ -z "$value" ]] || validate_input "$value" '^[a-zA-Z0-9@._/-]+( [a-zA-Z0-9@._/-]+)*$' "package list"; then
-                        declare -g "$key"="$value"
+                        EXCLUDED_FORMULAE="$value"
+                    fi
+                    ;;
+                EXCLUDED_CASKS)
+                    if [[ -z "$value" ]] || validate_input "$value" '^[a-zA-Z0-9@._/-]+( [a-zA-Z0-9@._/-]+)*$' "package list"; then
+                        EXCLUDED_CASKS="$value"
                     fi
                     ;;
             esac
@@ -212,12 +236,13 @@ show_usage() {
 Usage: $(basename "$0") [OPTIONS]
 
 OPTIONS:
-    -d, --dry-run      Show what would be updated without making changes
-    -v, --verbose      Enable verbose logging
-    -y, --yes          Automatically answer yes to prompts
-    -s, --skip-casks   Skip cask updates
-    -c, --skip-cleanup Skip cleanup operations
-    -h, --help         Show this help message
+    -d, --dry-run           Show what would be updated without making changes
+    -v, --verbose           Enable verbose logging
+    -y, --yes               Automatically answer yes to prompts
+    -s, --skip-casks        Skip cask updates
+    -c, --skip-cleanup      Skip cleanup operations
+        --skip-security-scan Skip vulnerability scanning
+    -h, --help              Show this help message
 
 EXAMPLES:
     $(basename "$0")                    # Interactive update
@@ -252,6 +277,10 @@ parse_arguments() {
                 ;;
             -c|--skip-cleanup)
                 SKIP_CLEANUP=true
+                shift
+                ;;
+            --skip-security-scan)
+                SKIP_SECURITY_SCAN=true
                 shift
                 ;;
             -h|--help)
@@ -759,6 +788,76 @@ run_doctor() {
     return $EXIT_SUCCESS
 }
 
+run_security_scan() {
+    if [[ "$SKIP_SECURITY_SCAN" == true ]]; then
+        log_message "⏭️  Skipping security scan (--skip-security-scan)"
+        return $EXIT_SUCCESS
+    fi
+
+    if [[ "$SECURITY_SCAN_ENABLED" != true ]]; then
+        log_verbose "Security scanning disabled in configuration"
+        return $EXIT_SUCCESS
+    fi
+
+    # Check if grype is installed
+    if ! command -v grype &> /dev/null; then
+        log_warning "⚠️  Grype not found. Install with: brew install --cask grype"
+        log_message "   Skipping security vulnerability scan"
+        return $EXIT_SUCCESS
+    fi
+
+    log_message "🔒 Running security vulnerability scan..."
+
+    local security_file="${LOG_FILE%.log}.security.log"
+    local vuln_count=0
+    local scan_exit_code
+
+    # Run grype scan with severity filtering
+    if [[ "$DRY_RUN" == true ]]; then
+        log_message "🔍 DRY RUN: Would scan for vulnerabilities (severity: $SECURITY_SCAN_SEVERITY)"
+        return $EXIT_SUCCESS
+    fi
+
+    # Scan Homebrew Cellar for vulnerabilities
+    log_verbose "Scanning $(brew --prefix)/Cellar for vulnerabilities..."
+    if grype dir:"$(brew --prefix)/Cellar" --only-fixed -q > "$security_file" 2>&1; then
+        scan_exit_code=0
+    else
+        scan_exit_code=$?
+    fi
+
+    # Count vulnerabilities found
+    if [[ -f "$security_file" ]]; then
+        # Count lines that match severity levels (excluding header)
+        vuln_count=$(grep -E "(Critical|High|Medium)" "$security_file" 2>/dev/null | grep -v "^NAME" | wc -l | xargs)
+
+        if [[ $vuln_count -gt 0 ]]; then
+            log_warning "⚠️  Found $vuln_count known vulnerabilities with fixes available"
+            echo -e "  ${YELLOW}Severity filter: $SECURITY_SCAN_SEVERITY${NC}"
+            echo -e "  ${BLUE}Full report: $(create_clickable_link "$security_file")${NC}"
+
+            # Show top 5 high-severity vulnerabilities
+            if [[ "$VERBOSE" == true ]]; then
+                echo -e "\n  ${YELLOW}Top vulnerabilities:${NC}"
+                head -15 "$security_file" | tail -n +2 | while IFS= read -r line; do
+                    echo -e "  $line"
+                done
+            fi
+
+            # Suggest running brew upgrade
+            echo -e "\n  ${GREEN}💡 Tip: Run 'brew upgrade' to update vulnerable packages${NC}"
+        else
+            log_success "✓ No known vulnerabilities found (severity: $SECURITY_SCAN_SEVERITY)"
+            log_verbose "Full scan report: $security_file"
+        fi
+    else
+        log_warning "Could not generate security report"
+    fi
+
+    # Return success - vulnerabilities are informational
+    return $EXIT_SUCCESS
+}
+
 cleanup_homebrew() {
     if [[ "$SKIP_CLEANUP" == true ]]; then
         log_message "⏭️  Skipping cleanup (--skip-cleanup)"
@@ -1007,9 +1106,10 @@ main() {
     fi
     
     print_separator
-    
-    # Maintenance
+
+    # Maintenance and Security
     run_doctor
+    run_security_scan
     if ! cleanup_homebrew; then
         log_warning "Cleanup encountered issues but continuing..."
     fi

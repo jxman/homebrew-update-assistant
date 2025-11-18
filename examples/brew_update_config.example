@@ -1,0 +1,29 @@
+# Homebrew Update Assistant Configuration
+# Copy this file to ~/.brew_update_config and customize as needed
+
+# Backup and Log Settings
+BACKUP_RETENTION_DAYS=30
+MAX_BACKUP_COUNT=5
+LOG_RETENTION_DAYS=30
+
+# Update Behavior
+AUTO_UPGRADE=false
+SKIP_CASKS_BY_DEFAULT=false
+CLEANUP_BY_DEFAULT=true
+
+# Logging
+LOG_LEVEL=INFO  # Options: DEBUG, INFO, WARNING, ERROR
+
+# Package Exclusions
+# Space-separated list of packages to exclude from updates
+EXCLUDED_FORMULAE=""
+EXCLUDED_CASKS=""
+# Example: EXCLUDED_FORMULAE="node@18 python@3.11"
+
+# Notifications (macOS only)
+ENABLE_NOTIFICATIONS=false
+
+# Security Vulnerability Scanning
+# Requires grype: brew install --cask grype
+SECURITY_SCAN_ENABLED=true
+SECURITY_SCAN_SEVERITY=HIGH,CRITICAL  # Options: LOW, MEDIUM, HIGH, CRITICAL (comma-separated)

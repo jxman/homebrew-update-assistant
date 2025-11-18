@@ -31,6 +31,7 @@ The Homebrew Update Assistant is a production-ready script that transforms the t
 - 📝 **Advanced Logging**: Multi-level logging with timestamped entries and color-coded output
 - 🏥 **Health Monitoring**: Intelligent Homebrew doctor analysis with actionable recommendations
 - 🧹 **Intelligent Cleanup**: Automated cleanup with unused dependency removal and cache optimization
+- 🔒 **Security Scanning**: Automated vulnerability detection using Grype for all installed packages
 
 ### Enhanced Features
 - 🎯 **CLI Interface**: Full argument parsing with comprehensive help and examples
@@ -253,6 +254,7 @@ brew-updates --help
 | `-y, --yes` | Automatically answer yes to all prompts (automation mode) |
 | `-s, --skip-casks` | Skip cask updates (formulae only) |
 | `-c, --skip-cleanup` | Skip cleanup operations |
+| `--skip-security-scan` | Skip vulnerability scanning (requires Grype) |
 | `-h, --help` | Show help message with examples |
 
 ### Advanced Usage Examples
@@ -309,6 +311,10 @@ LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
 # Notifications (macOS only)
 ENABLE_NOTIFICATIONS=true  # Enable macOS notification center alerts
 
+# Security vulnerability scanning
+SECURITY_SCAN_ENABLED=true  # Enable vulnerability scanning (requires Grype)
+SECURITY_SCAN_SEVERITY=HIGH,CRITICAL  # Severity levels to report: LOW, MEDIUM, HIGH, CRITICAL
+
 # Package exclusions (space-separated)
 EXCLUDED_FORMULAE="php@7.4 node@14 python@3.9"
 EXCLUDED_CASKS="docker-desktop virtualbox"
@@ -329,6 +335,172 @@ export BREW_UPDATE_TIMEOUT=600
 export BREW_UPDATE_MAX_RETRIES=5
 ./brew-updates.command --verbose
 ```
+
+## 🔒 Security Vulnerability Scanning
+
+### Overview
+The Homebrew Update Assistant integrates with [Grype](https://github.com/anchore/grype) to automatically scan all installed Homebrew packages for known security vulnerabilities. This helps you identify and fix security issues before they become problems.
+
+### Setup
+
+**1. Install Grype:**
+```bash
+brew install --cask grype
+```
+
+**2. Enable Security Scanning:**
+
+Add to your `~/.brew_update_config`:
+```bash
+SECURITY_SCAN_ENABLED=true
+SECURITY_SCAN_SEVERITY=HIGH,CRITICAL  # Options: LOW, MEDIUM, HIGH, CRITICAL
+```
+
+**3. Run the scan:**
+```bash
+./brew-updates.command
+# or skip the scan for specific runs:
+./brew-updates.command --skip-security-scan
+```
+
+### Features
+
+- **Automated Scanning**: Runs automatically after Homebrew updates and health checks
+- **Severity Filtering**: Focus on critical vulnerabilities only or scan all levels
+- **Only Fixed Vulnerabilities**: Reports only issues with available fixes
+- **Detailed Reports**: Saves scan results to `.security.log` files for review
+- **Non-Blocking**: Vulnerabilities are reported but don't stop the update process
+- **Smart Detection**: Automatically skips if Grype is not installed
+
+### Example Output
+
+```bash
+🔒 Running security vulnerability scan...
+⚠️  Found 47 known vulnerabilities with fixes available
+  Severity filter: HIGH,CRITICAL
+  Full report: ~/.brew_logs/brew_update_20251109_093231.security.log
+
+  Top vulnerabilities:
+  NAME       INSTALLED  FIXED IN  TYPE  VULNERABILITY        SEVERITY
+  tzinfo     1.2.2      1.2.10    gem   GHSA-5cm2-9h8c-rvfx  High
+  json       1.7.7      2.3.0     gem   GHSA-jphg-qwrw-7w9g  High
+  ...
+
+  💡 Tip: Run 'brew upgrade' to update vulnerable packages
+```
+
+### Weekly Security Audits
+
+Set up automated weekly scans:
+
+```bash
+# Add to crontab (crontab -e)
+0 9 * * 1 /path/to/brew-updates.command --yes --verbose
+```
+
+Or use a LaunchAgent (see [LaunchAgent Setup](#-launchagent-automation-macos)):
+
+```xml
+<!-- Security scans run automatically with regular updates -->
+<key>StartCalendarInterval</key>
+<dict>
+    <key>Weekday</key>
+    <integer>1</integer>  <!-- Monday -->
+    <key>Hour</key>
+    <integer>9</integer>
+</dict>
+```
+
+### Security Scan Configuration
+
+| Configuration Option | Description | Default |
+|---------------------|-------------|---------|
+| `SECURITY_SCAN_ENABLED` | Enable/disable vulnerability scanning | `false` |
+| `SECURITY_SCAN_SEVERITY` | Comma-separated severity levels to report | `HIGH,CRITICAL` |
+| `--skip-security-scan` | Command-line flag to skip scan for one run | N/A |
+
+### Understanding Security Reports
+
+Security scan reports are saved to `~/.brew_logs/` with the `.security.log` extension:
+
+- **NAME**: Package name with the vulnerability
+- **INSTALLED**: Currently installed version
+- **FIXED IN**: Version that fixes the vulnerability
+- **TYPE**: Package type (gem, go-module, npm, python, etc.)
+- **VULNERABILITY**: CVE or GHSA identifier
+- **SEVERITY**: Risk level (LOW, MEDIUM, HIGH, CRITICAL)
+- **RISK**: Combined risk score based on exploitability
+
+### Finding Parent Packages for Vulnerabilities
+
+Security scans report vulnerabilities in **dependencies** (Ruby gems, Go modules, Python packages), not the Homebrew packages themselves. To find which Homebrew package contains a vulnerable dependency:
+
+**Quick Command:**
+```bash
+# Find which packages contain a specific vulnerable dependency
+find /opt/homebrew/Cellar -type d -name "PACKAGE_NAME*" 2>/dev/null | \
+  sed 's|/opt/homebrew/Cellar/||' | cut -d'/' -f1 | sort -u
+```
+
+**Common Vulnerability Mappings:**
+
+| Vulnerable Dependency | Parent Homebrew Package(s) | Fix Command |
+|-----------------------|---------------------------|-------------|
+| `tzinfo`, `json`, `rexml` (Ruby gems) | `cocoapods`, `ruby` | `brew upgrade cocoapods ruby` |
+| `Go stdlib` (Go modules) | `go`, `helm`, `terraform` | `brew upgrade go` |
+| `pip`, `urllib3` (Python) | `python@3.x`, `aws-sam-cli`, `awscli`, `azure-cli` | `brew upgrade python@3.12 aws-sam-cli` |
+| `cocoapods-downloader` | `cocoapods` | `brew upgrade cocoapods` |
+| `playwright` (npm) | `node` | `brew upgrade node` |
+
+**Automated Helper Script:**
+
+The project includes `scripts/fix-vulnerabilities.sh` to automatically upgrade packages with known vulnerabilities:
+
+```bash
+# Run the automated fix script
+./scripts/fix-vulnerabilities.sh
+```
+
+This script will:
+- Update Homebrew
+- Upgrade all packages with vulnerable dependencies
+- Update Python pip and urllib3 across all Python versions
+- Run a security scan to verify fixes
+- Show remaining vulnerabilities
+
+For more details, see:
+- [Vulnerability Fix Quickstart Guide](docs/VULNERABILITY_FIX_QUICKSTART.md)
+- [Security Setup Summary](docs/SECURITY_SETUP_SUMMARY.md)
+
+### Best Practices
+
+1. **Enable by Default**: Add `SECURITY_SCAN_ENABLED=true` to your config file
+2. **Weekly Scans**: Schedule regular automated scans with LaunchAgent or cron
+3. **Review Reports**: Check `.security.log` files for detailed vulnerability information
+4. **Understand Dependencies**: Most vulnerabilities are in bundled dependencies, not main packages
+5. **Focus on HIGH/CRITICAL**: Don't stress over every MEDIUM/LOW vulnerability
+6. **Use Fix Script**: Run `./scripts/fix-vulnerabilities.sh` for automated remediation
+7. **Update Promptly**: Run `brew upgrade` to fix identified vulnerabilities
+8. **Keep Grype Updated**: Update Grype regularly with `brew upgrade --cask grype`
+
+### Troubleshooting
+
+**Grype not found:**
+```bash
+brew install --cask grype
+# Verify installation:
+grype version
+```
+
+**Scan taking too long:**
+- Grype caches vulnerability databases locally (first run is slower)
+- Subsequent scans are much faster
+- Consider using `--skip-security-scan` for quick updates
+
+**False positives:**
+- Grype uses multiple vulnerability databases
+- Some warnings may not apply to your use case
+- Review the CVE/GHSA details in the report for context
 
 ## 🍎 macOS Integration
 
@@ -462,8 +634,8 @@ mkdir -p ~/bin
 cp brew-updates.command ~/bin/
 chmod +x ~/bin/brew-updates.command
 
-# 2. Copy the sample plist and customize it
-cp com.user.brew-update.plist.sample com.user.brew-update.plist
+# 2. Copy the sample plist from examples/ and customize it
+cp examples/com.user.brew-update.plist.sample com.user.brew-update.plist
 
 # 3. Edit the plist file and update paths
 # - Update USERNAME to your actual username
@@ -677,6 +849,59 @@ chmod +x brew-updates.command
 - 📚 **Documentation**: Improve guides and examples
 - 🎨 **UI/UX improvements**: Enhance user experience
 - 🔧 **Configuration options**: Add new customization capabilities
+
+For detailed contribution guidelines, see [CONTRIBUTING.md](docs/CONTRIBUTING.md).
+
+## 📁 Project Structure
+
+```
+Brew Updates/
+├── brew-updates.command          # Main script (production-ready)
+├── README.md                      # This file
+├── LICENSE                        # MIT License
+├── CLAUDE.md                      # Claude Code project instructions
+├── docs/                          # Documentation
+│   ├── CHANGELOG.md              # Version history and changes
+│   ├── IMPROVEMENTS.md           # Planned improvements and roadmap
+│   ├── CONTRIBUTING.md           # Contribution guidelines
+│   ├── SECURITY_SETUP_SUMMARY.md # Security scanning setup guide
+│   └── VULNERABILITY_FIX_QUICKSTART.md  # Quick vulnerability fix guide
+├── examples/                      # Configuration examples
+│   ├── brew_update_config.example  # Sample configuration file
+│   └── com.user.brew-update.plist.sample  # LaunchAgent template
+└── scripts/                       # Helper scripts
+    └── fix-vulnerabilities.sh     # Automated vulnerability remediation
+```
+
+### File Descriptions
+
+**Core Files:**
+- `brew-updates.command` - Main executable script (~950 lines)
+- `README.md` - Complete documentation and usage guide
+- `LICENSE` - MIT License details
+- `CLAUDE.md` - Instructions for Claude Code AI assistant
+
+**Documentation (docs/):**
+- `CHANGELOG.md` - Version history, features added, and changes
+- `IMPROVEMENTS.md` - Future enhancements and prioritized roadmap
+- `CONTRIBUTING.md` - Guidelines for contributors
+- `SECURITY_SETUP_SUMMARY.md` - Grype installation and security scanning setup
+- `VULNERABILITY_FIX_QUICKSTART.md` - Quick guide to fixing vulnerabilities
+
+**Examples (examples/):**
+- `brew_update_config.example` - Sample `~/.brew_update_config` with all options
+- `com.user.brew-update.plist.sample` - macOS LaunchAgent template for automation
+
+**Scripts (scripts/):**
+- `fix-vulnerabilities.sh` - Automatically updates packages with known vulnerabilities
+
+### Runtime Directories
+
+These directories are created automatically in your home directory:
+
+- `~/.brew_logs/` - Log files (`.log`, `.doctor.log`, `.security.log`)
+- `~/.brew_backups/` - Brewfile backups with 30-day retention
+- `~/.brew_update_config` - Optional user configuration file
 
 ## 📄 License
 
