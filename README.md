@@ -678,7 +678,25 @@ launchctl load ~/Library/LaunchAgents/com.user.brew-update.plist
 
 **Customizing Schedule:**
 
-The included sample runs every Monday at 9:00 AM. To customize:
+The included sample runs every Monday at 9:00 AM. To customize, edit your installed plist file:
+
+**File Location:** `~/Library/LaunchAgents/com.user.brew-update.plist`
+
+**Quick Edit:**
+```bash
+# Open in default text editor
+open ~/Library/LaunchAgents/com.user.brew-update.plist
+
+# Or use nano
+nano ~/Library/LaunchAgents/com.user.brew-update.plist
+
+# Or use VS Code
+code ~/Library/LaunchAgents/com.user.brew-update.plist
+```
+
+**Schedule Examples:**
+
+Find the `<key>StartCalendarInterval</key>` section and replace it with one of these:
 
 ```xml
 <!-- Daily at 3:00 AM -->
@@ -717,7 +735,23 @@ The included sample runs every Monday at 9:00 AM. To customize:
 </array>
 ```
 
+**After Editing the Schedule:**
+
+You must reload the LaunchAgent for changes to take effect:
+
+```bash
+# Unload the current configuration
+launchctl unload ~/Library/LaunchAgents/com.user.brew-update.plist
+
+# Reload with new schedule
+launchctl load ~/Library/LaunchAgents/com.user.brew-update.plist
+
+# Verify it's loaded
+launchctl list com.user.brew-update
+```
+
 **Important Notes:**
+- Edit the file at: `~/Library/LaunchAgents/com.user.brew-update.plist` (not the sample)
 - The script copy in `~/bin/` is what LaunchAgent will run
 - If you update the original script, remember to copy it to `~/bin/` again
 - LaunchAgent runs in a minimal environment - PATH is set in the plist
