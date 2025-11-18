@@ -421,21 +421,43 @@ Or use a LaunchAgent (see [LaunchAgent Setup](#-launchagent-automation-macos)):
 
 ### Understanding Security Reports
 
-Security scan reports are saved to `~/.brew_logs/` with the `.security.log` extension:
+Security scans generate **three types of reports** saved to `~/.brew_logs/`:
 
-- **NAME**: Package name with the vulnerability
-- **INSTALLED**: Currently installed version
-- **FIXED IN**: Version that fixes the vulnerability
-- **TYPE**: Package type (gem, go-module, npm, python, etc.)
-- **VULNERABILITY**: CVE or GHSA identifier
-- **SEVERITY**: Risk level (LOW, MEDIUM, HIGH, CRITICAL)
-- **RISK**: Combined risk score based on exploitability
+1. **Summary Report** (`*.security.log`) - Quick table view:
+   - **NAME**: Package name with the vulnerability
+   - **INSTALLED**: Currently installed version
+   - **FIXED IN**: Version that fixes the vulnerability
+   - **TYPE**: Package type (gem, go-module, npm, python, etc.)
+   - **VULNERABILITY**: CVE or GHSA identifier
+   - **SEVERITY**: Risk level (LOW, MEDIUM, HIGH, CRITICAL)
+   - **RISK**: Combined risk score based on exploitability
+
+2. **JSON Report** (`*.security.json`) - Raw data for custom analysis
+
+3. **Detailed Report with File Paths** (`*.security.detailed.log`) - Shows exact file locations:
+   ```
+   PACKAGE: stdlib
+   VERSION: go1.24.5
+   CVE: CVE-2025-61723
+   SEVERITY: High
+   FIXED IN: 1.24.8, 1.25.2
+   FILE PATH: /1.13.5/bin/terraform
+   HOMEBREW PACKAGE: terraform
+   ---
+   ```
+
+**Requirements:**
+- Detailed reports require `jq` to be installed: `brew install jq`
+- If `jq` is not available, only summary and JSON reports are generated
 
 ### Finding Parent Packages for Vulnerabilities
 
-Security scans report vulnerabilities in **dependencies** (Ruby gems, Go modules, Python packages), not the Homebrew packages themselves. To find which Homebrew package contains a vulnerable dependency:
+Security scans report vulnerabilities in **dependencies** (Ruby gems, Go modules, Python packages), not the Homebrew packages themselves.
 
-**Quick Command:**
+**NEW: Automatic File Path Detection**
+The detailed security report (`*.security.detailed.log`) now automatically shows which file and Homebrew package contains each vulnerability. No manual searching needed!
+
+**Manual Method (if needed):**
 ```bash
 # Find which packages contain a specific vulnerable dependency
 find /opt/homebrew/Cellar -type d -name "PACKAGE_NAME*" 2>/dev/null | \

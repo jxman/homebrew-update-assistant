@@ -809,6 +809,8 @@ run_security_scan() {
     log_message "🔒 Running security vulnerability scan..."
 
     local security_file="${LOG_FILE%.log}.security.log"
+    local security_json="${LOG_FILE%.log}.security.json"
+    local security_detailed="${LOG_FILE%.log}.security.detailed.log"
     local vuln_count=0
     local scan_exit_code
 
@@ -818,12 +820,50 @@ run_security_scan() {
         return $EXIT_SUCCESS
     fi
 
-    # Scan Homebrew Cellar for vulnerabilities
+    # Scan Homebrew Cellar for vulnerabilities (table format for quick view)
     log_verbose "Scanning $(brew --prefix)/Cellar for vulnerabilities..."
     if grype dir:"$(brew --prefix)/Cellar" --only-fixed -q > "$security_file" 2>&1; then
         scan_exit_code=0
     else
         scan_exit_code=$?
+    fi
+
+    # Also generate JSON output for detailed analysis with file paths
+    # Note: JSON scan can take longer, run in background if needed
+    if command -v jq &> /dev/null; then
+        log_verbose "Generating detailed vulnerability report with file paths..."
+        # Grype writes PURL errors and other messages to stderr, filter them out
+        local grype_json_tmp="${security_json}.tmp"
+        if grype dir:"$(brew --prefix)/Cellar" --only-fixed -o json 2>&1 | grep -v "^error purl\|^\[" > "$grype_json_tmp" && [[ -s "$grype_json_tmp" ]]; then
+            # Parse JSON to create detailed report with file paths
+            {
+                echo "VULNERABILITY REPORT WITH FILE PATHS"
+                echo "Generated: $(date '+%Y-%m-%d %H:%M:%S')"
+                echo "=================================================="
+                echo ""
+
+                jq -r '.matches[] |
+                    select(.vulnerability.severity == "Critical" or
+                           .vulnerability.severity == "High" or
+                           .vulnerability.severity == "Medium") |
+                    "PACKAGE: \(.artifact.name)
+VERSION: \(.artifact.version)
+CVE: \(.vulnerability.id)
+SEVERITY: \(.vulnerability.severity)
+FIXED IN: \(.vulnerability.fix.versions // ["No fix available"] | join(", "))
+FILE PATH: \(.artifact.locations[0].path // "N/A")
+HOMEBREW PACKAGE: \(.artifact.locations[0].path // "" | split("/") | .[4] // "Unknown")
+---"' "$grype_json_tmp" 2>/dev/null
+            } > "$security_detailed"
+
+            # Move clean JSON to final location
+            mv "$grype_json_tmp" "$security_json"
+        else
+            log_verbose "JSON security scan did not complete successfully"
+            rm -f "$grype_json_tmp"
+        fi
+    else
+        log_verbose "jq not found - detailed vulnerability report not generated"
     fi
 
     # Count vulnerabilities found
@@ -834,7 +874,11 @@ run_security_scan() {
         if [[ $vuln_count -gt 0 ]]; then
             log_warning "⚠️  Found $vuln_count known vulnerabilities with fixes available"
             echo -e "  ${YELLOW}Severity filter: $SECURITY_SCAN_SEVERITY${NC}"
-            echo -e "  ${BLUE}Full report: $(create_clickable_link "$security_file")${NC}"
+            echo -e "  ${BLUE}Summary report: $(create_clickable_link "$security_file")${NC}"
+
+            if [[ -f "$security_detailed" ]] && [[ -s "$security_detailed" ]] && [[ $(wc -l < "$security_detailed") -gt 5 ]]; then
+                echo -e "  ${BLUE}Detailed report with file paths: $(create_clickable_link "$security_detailed")${NC}"
+            fi
 
             # Show top 5 high-severity vulnerabilities
             if [[ "$VERBOSE" == true ]]; then
