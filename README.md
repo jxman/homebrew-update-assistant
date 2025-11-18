@@ -655,12 +655,18 @@ tail -f ~/.brew_logs/launchagent.log
 
 **Managing LaunchAgent:**
 ```bash
-# Check status
-launchctl list | grep brew-update
+# Check status (recommended method)
+launchctl list com.user.brew-update
+
+# Alternative: Search all LaunchAgents
+launchctl list | grep -i brew
 
 # View logs
 tail -50 ~/.brew_logs/launchagent.log          # Standard output
 tail -50 ~/.brew_logs/launchagent_error.log    # Errors only
+
+# Check when last run
+ls -lht ~/.brew_logs/launchagent*.log | head -3
 
 # Stop the LaunchAgent
 launchctl unload ~/Library/LaunchAgents/com.user.brew-update.plist
