@@ -1,0 +1,103 @@
+# Pre-commit hooks for Homebrew Update Assistant
+# Install: pip install pre-commit
+# Setup: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Shell script validation
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        name: ShellCheck - Shell script linter
+        args: ['--severity=warning']
+        exclude: ^(\.git|\.github)/
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      # Prevent committing large files
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+
+      # Check for files that would conflict in case-insensitive filesystems
+      - id: check-case-conflict
+
+      # Ensure files end with a newline
+      - id: end-of-file-fixer
+        exclude: \.(log|json)$
+
+      # Trim trailing whitespace
+      - id: trailing-whitespace
+        exclude: \.(md|log)$
+        args: ['--markdown-linebreak-ext=md']
+
+      # Check YAML syntax
+      - id: check-yaml
+
+      # Check JSON syntax
+      - id: check-json
+
+      # Detect private keys
+      - id: detect-private-key
+
+      # Check for merge conflict markers
+      - id: check-merge-conflict
+
+      # Check executables have shebangs
+      - id: check-shebang-scripts-are-executable
+
+      # Check shebangs are correct
+      - id: check-executables-have-shebangs
+
+      # Prevent committing directly to main/master
+      - id: no-commit-to-branch
+        args: ['--branch', 'main', '--branch', 'master']
+        stages: [commit]
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.43.0
+    hooks:
+      - id: markdownlint
+        name: Markdown linter
+        args: ['--fix', '--disable', 'MD013', 'MD033', 'MD041']
+        # MD013: Line length (disabled - too strict for code blocks)
+        # MD033: Inline HTML (disabled - needed for badges)
+        # MD041: First line in file should be top-level heading (disabled)
+
+  # Bash syntax validation
+  - repo: local
+    hooks:
+      - id: bash-syntax-check
+        name: Bash syntax check
+        entry: bash -n
+        language: system
+        files: \.(sh|command|bash)$
+        exclude: ^(\.git|\.github)/
+
+      # Custom hook to ensure scripts are executable
+      - id: check-script-executable
+        name: Ensure scripts are executable
+        entry: ./hooks/check-executable.sh
+        language: script
+        files: \.(command|sh)$
+        exclude: ^(\.git|\.github|hooks)/
+        pass_filenames: true
+
+      # Custom hook to prevent committing log files
+      - id: no-log-files
+        name: Prevent committing log files
+        entry: Log files should not be committed
+        language: fail
+        files: \.(log|security\.json)$
+
+      # Custom hook to check for TODOs in code
+      - id: check-todos
+        name: Check for unresolved TODOs
+        entry: grep -nHE '(TODO|FIXME|XXX|HACK):'
+        language: system
+        files: \.(sh|command|md)$
+        exclude: ^(docs/|\.github/)
+        pass_filenames: true
