@@ -134,6 +134,14 @@ The Homebrew Update Assistant follows a modular, pipeline-based architecture wit
                            │
                            ▼
               ┌────────────────────────┐
+              │  Security Scan         │
+              │  - Grype scan (Cellar) │
+              │  - Generate 3 reports  │
+              │  - File path mapping   │
+              └────────────┬───────────┘
+                           │
+                           ▼
+              ┌────────────────────────┐
               │  Cleanup               │
               │  - brew cleanup        │
               │  - Remove unused deps  │
@@ -162,7 +170,10 @@ The Homebrew Update Assistant follows a modular, pipeline-based architecture wit
 ├───────────────────────────────────────────────────────────────────┤
 │  ~/.brew_logs/                                                    │
 │  ├── brew_update_YYYYMMDD_HHMMSS.log                            │
-│  └── brew_update_YYYYMMDD_HHMMSS.doctor.log                     │
+│  ├── brew_update_YYYYMMDD_HHMMSS.doctor.log                     │
+│  ├── brew_update_YYYYMMDD_HHMMSS.security.log                   │
+│  ├── brew_update_YYYYMMDD_HHMMSS.security.json                  │
+│  └── brew_update_YYYYMMDD_HHMMSS.security.detailed.log          │
 │                                                                   │
 │  ~/.brew_backups/                                                 │
 │  └── brew_backup_YYYYMMDD_HHMMSS                                │
