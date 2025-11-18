@@ -54,7 +54,7 @@ repos:
       # Prevent committing directly to main/master
       - id: no-commit-to-branch
         args: ['--branch', 'main', '--branch', 'master']
-        stages: [commit]
+        stages: [pre-commit]
 
   # Markdown linting
   - repo: https://github.com/igorshubovych/markdownlint-cli
@@ -94,9 +94,10 @@ repos:
         files: \.(log|security\.json)$
 
       # Custom hook to check for TODOs in code
+      # Note: This hook will WARN (but not block) if TODOs are found
       - id: check-todos
         name: Check for unresolved TODOs
-        entry: grep -nHE '(TODO|FIXME|XXX|HACK):'
+        entry: bash -c 'grep -nHE "(TODO|FIXME|XXX|HACK):" "$@" && exit 1 || exit 0' --
         language: system
         files: \.(sh|command|md)$
         exclude: ^(docs/|\.github/)

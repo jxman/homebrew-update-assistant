@@ -12,11 +12,15 @@ set -o pipefail
 ###################
 # Configuration
 ###################
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly BACKUP_DIR="${HOME}/.brew_backups"
-readonly BACKUP_FILE="${BACKUP_DIR}/brew_backup_$(date +%Y%m%d_%H%M%S)"
 readonly LOG_DIR="${HOME}/.brew_logs"
-readonly LOG_FILE="${LOG_DIR}/brew_update_$(date +%Y%m%d_%H%M%S).log"
+
+# Declare and assign separately to avoid masking return values (SC2155)
+BACKUP_FILE="${BACKUP_DIR}/brew_backup_$(date +%Y%m%d_%H%M%S)"
+readonly BACKUP_FILE
+
+LOG_FILE="${LOG_DIR}/brew_update_$(date +%Y%m%d_%H%M%S).log"
+readonly LOG_FILE
 readonly MAX_RETRIES=3
 readonly TIMEOUT=300
 readonly MIN_DISK_SPACE_GB=1
@@ -44,7 +48,8 @@ SKIP_CASKS=false
 SKIP_CLEANUP=false
 SKIP_SECURITY_SCAN=false
 
-# Configuration variables
+# Configuration variables (can be set via config file, exported for potential external use)
+# shellcheck disable=SC2034  # These variables are loaded from config and may be used by external scripts
 BACKUP_RETENTION_DAYS=30
 MAX_BACKUP_COUNT=5
 LOG_RETENTION_DAYS=30
@@ -96,8 +101,10 @@ print_separator() {
 
 log_message() {
     local level=${2:-INFO}
-    local message="[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $1"
-    
+    # Declare and assign separately to avoid masking return values (SC2155)
+    local message
+    message="[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $1"
+
     # Ensure log directory exists before writing
     if [[ -n "${LOG_FILE:-}" ]]; then
         mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null
@@ -164,7 +171,7 @@ validate_input() {
     local input="$1"
     local pattern="$2"
     local description="$3"
-    
+
     if [[ ! "$input" =~ $pattern ]]; then
         log_error "❌ Invalid $description: $input"
         return 1
@@ -180,8 +187,9 @@ load_config() {
             # Skip comments and empty lines
             [[ "$key" =~ ^[[:space:]]*# ]] && continue
             [[ -z "$key" ]] && continue
-            
+
             # Validate and set configuration variables
+            # shellcheck disable=SC2034  # Config variables may be unused but are part of the configuration interface
             case "$key" in
                 BACKUP_RETENTION_DAYS)
                     validate_input "$value" '^[0-9]+$' "backup retention days" && BACKUP_RETENTION_DAYS="$value"
@@ -309,7 +317,7 @@ parse_arguments() {
         validate_input "$BREW_UPDATE_TIMEOUT" '^[0-9]+$' "timeout value" || exit $EXIT_GENERAL_ERROR
         readonly TIMEOUT="$BREW_UPDATE_TIMEOUT"
     fi
-    
+
     if [[ -n "${BREW_UPDATE_MAX_RETRIES:-}" ]]; then
         validate_input "$BREW_UPDATE_MAX_RETRIES" '^[0-9]+$' "max retries" || exit $EXIT_GENERAL_ERROR
         readonly MAX_RETRIES="$BREW_UPDATE_MAX_RETRIES"
@@ -338,16 +346,16 @@ check_homebrew() {
 
 check_prerequisites() {
     local missing_tools=()
-    
+
     # Check for GNU coreutils (optional but recommended)
     if ! command -v gtimeout >/dev/null 2>&1; then
         log_warning "💡 Consider installing GNU coreutils for enhanced functionality:"
         echo "   brew install coreutils"
     fi
-    
+
     # Check for other useful tools
     command -v git >/dev/null 2>&1 || missing_tools+=("git")
-    
+
     if [ ${#missing_tools[@]} -gt 0 ]; then
         log_warning "⚠️  Missing recommended tools: ${missing_tools[*]}"
     fi
@@ -369,13 +377,13 @@ check_network() {
 get_disk_space() {
     local path="$1"
     local available_gb
-    
+
     if command -v gdf >/dev/null 2>&1; then
         available_gb=$(gdf -BG "$path" 2>/dev/null | awk 'NR==2 {gsub("G",""); print $4}' || echo "unknown")
     else
         available_gb=$(df -g "$path" 2>/dev/null | awk 'NR==2 {print $4}' || echo "unknown")
     fi
-    
+
     echo "$available_gb"
 }
 
@@ -385,22 +393,22 @@ check_disk_space() {
         log_error "Failed to get Homebrew prefix"
         return $EXIT_HOMEBREW_ERROR
     }
-    
+
     local available_gb
     available_gb=$(get_disk_space "$brew_prefix")
-    
+
     if [[ "$available_gb" == "unknown" ]]; then
         log_warning "⚠️  Could not determine available disk space"
         return $EXIT_SUCCESS
     fi
-    
+
     log_verbose "Available disk space: ${available_gb}GB"
-    
+
     if [[ "$available_gb" -lt "$MIN_DISK_SPACE_GB" ]]; then
         log_warning "⚠️  Low disk space: ${available_gb}GB (minimum: ${MIN_DISK_SPACE_GB}GB)"
         return $EXIT_DISK_SPACE_ERROR
     fi
-    
+
     log_verbose "✓ Sufficient disk space available"
     return $EXIT_SUCCESS
 }
@@ -410,13 +418,13 @@ check_disk_space() {
 ###################
 create_backup() {
     log_message "📑 Creating Homebrew backup..."
-    
+
     if brew bundle dump --file="$BACKUP_FILE" 2>/dev/null; then
         log_success "✓ Backup created: $BACKUP_FILE"
     else
         log_warning "⚠️  Failed to create backup, continuing anyway..."
     fi
-    
+
     # Keep only last 5 backups
     cleanup_old_backups
 }
@@ -462,12 +470,12 @@ cleanup_old_logs() {
 run_with_timeout() {
     local -a cmd_array
     local description=${2:-"command"}
-    
+
     # Parse command into array to avoid eval security issues
     read -ra cmd_array <<< "$1"
-    
+
     log_verbose "Running: ${cmd_array[*]}"
-    
+
     if command -v gtimeout >/dev/null 2>&1; then
         if ! gtimeout "$TIMEOUT" "${cmd_array[@]}"; then
             log_error "❌ Timeout: $description"
@@ -486,7 +494,7 @@ run_with_timeout() {
             return $EXIT_GENERAL_ERROR
         fi
     fi
-    
+
     return $EXIT_SUCCESS
 }
 
@@ -495,22 +503,22 @@ run_with_retry() {
     local description="${2:-command}"
     local retry_count=0
     local exit_code
-    
+
     while [[ $retry_count -lt $MAX_RETRIES ]]; do
         if run_with_timeout "$cmd" "$description"; then
             return $EXIT_SUCCESS
         fi
-        
+
         exit_code=$?
         retry_count=$((retry_count + 1))
-        
+
         if [[ $retry_count -lt $MAX_RETRIES ]]; then
             local wait_time=$((retry_count * 2))
             log_warning "⚠️  Retry $retry_count/$MAX_RETRIES for: $description (waiting ${wait_time}s)"
             sleep "$wait_time"
         fi
     done
-    
+
     log_error "❌ Failed after $MAX_RETRIES attempts: $description"
     return "$exit_code"
 }
@@ -518,12 +526,12 @@ run_with_retry() {
 confirm_action() {
     local prompt="$1"
     local response
-    
+
     if [[ "$AUTO_YES" == true ]]; then
         log_verbose "Auto-confirming: $prompt"
         return $EXIT_SUCCESS
     fi
-    
+
     # Use read with prompt for better security
     read -r -p "$prompt (y/N): " response
     case "$response" in
@@ -541,12 +549,12 @@ confirm_action() {
 ###################
 update_homebrew() {
     log_message "1️⃣  Updating Homebrew..."
-    
+
     if [[ "$DRY_RUN" == true ]]; then
         log_message "🔍 DRY RUN: Would update Homebrew"
         return $EXIT_SUCCESS
     fi
-    
+
     if run_with_retry "brew update" "Homebrew update"; then
         log_success "✓ Homebrew updated successfully"
         return $EXIT_SUCCESS
@@ -558,16 +566,16 @@ update_homebrew() {
 
 check_outdated_packages() {
     log_message "2️⃣  Checking for outdated packages..."
-    
+
     local outdated_formulae outdated_casks
     local has_updates=false
-    
+
     # Check formulae with error handling
     if ! outdated_formulae=$(brew outdated --formula 2>/dev/null); then
         log_warning "Failed to check outdated formulae"
         outdated_formulae=""
     fi
-    
+
     # Check casks if not skipped
     if [[ "$SKIP_CASKS" == false ]]; then
         if ! outdated_casks=$(brew outdated --cask 2>/dev/null); then
@@ -575,33 +583,33 @@ check_outdated_packages() {
             outdated_casks=""
         fi
     fi
-    
+
     # Filter excluded packages
     if [[ -n "$EXCLUDED_FORMULAE" && -n "$outdated_formulae" ]]; then
         local excluded_pattern
         excluded_pattern=$(echo "$EXCLUDED_FORMULAE" | tr ' ' '|')
         outdated_formulae=$(echo "$outdated_formulae" | grep -vE "^($excluded_pattern)")
     fi
-    
+
     if [[ -n "$EXCLUDED_CASKS" && -n "$outdated_casks" ]]; then
         local excluded_pattern
         excluded_pattern=$(echo "$EXCLUDED_CASKS" | tr ' ' '|')
         outdated_casks=$(echo "$outdated_casks" | grep -vE "^($excluded_pattern)")
     fi
-    
+
     # Display results
     if [[ -n "$outdated_formulae" ]]; then
         echo -e "\n📦 Outdated formulae:"
         echo "$outdated_formulae" | sed 's/^/  /'
         has_updates=true
     fi
-    
+
     if [[ -n "$outdated_casks" && "$SKIP_CASKS" == false ]]; then
         echo -e "\n🎲 Outdated casks:"
         echo "$outdated_casks" | sed 's/^/  /'
         has_updates=true
     fi
-    
+
     if [[ "$has_updates" == false ]]; then
         log_success "✨ All packages are up to date!"
         send_notification "Homebrew Update" "All packages are up to date!" "Blow"
@@ -623,19 +631,19 @@ check_outdated_packages() {
 show_upgrade_preview() {
     if [[ "$DRY_RUN" == true ]] || confirm_action "🔍 Show upgrade preview?"; then
         echo -e "\n🔍 Upgrade preview:"
-        
+
         # Show formulae preview
         if ! brew upgrade --dry-run 2>/dev/null; then
             log_warning "Could not generate formulae upgrade preview"
         fi
-        
+
         # Show casks preview if not skipped
         if [[ "$SKIP_CASKS" == false ]]; then
             if ! brew upgrade --cask --dry-run 2>/dev/null; then
                 log_warning "Could not generate cask upgrade preview"
             fi
         fi
-        
+
         print_separator
     fi
 }
@@ -645,17 +653,17 @@ upgrade_packages() {
         log_message "🔍 DRY RUN: Would upgrade packages"
         return $EXIT_SUCCESS
     fi
-    
+
     if ! confirm_action "🚀 Proceed with upgrade?"; then
         log_message "⏭️  Skipping package upgrade"
         return $EXIT_SUCCESS
     fi
-    
+
     log_message "3️⃣  Upgrading packages..."
-    
+
     local formulae_result=0
     local cask_result=0
-    
+
     # Upgrade formulae
     if run_with_retry "brew upgrade --formula" "formulae upgrade"; then
         log_success "✓ Formulae upgraded successfully"
@@ -663,7 +671,7 @@ upgrade_packages() {
         formulae_result=$?
         log_warning "⚠️  Some formulae upgrades failed"
     fi
-    
+
     # Upgrade casks
     if [[ "$SKIP_CASKS" == false ]]; then
         if run_with_retry "brew upgrade --cask" "cask upgrade"; then
@@ -673,14 +681,14 @@ upgrade_packages() {
             log_warning "⚠️  Some cask upgrades failed"
         fi
     fi
-    
+
     # Return worst exit code
     if [[ $formulae_result -ne 0 ]]; then
         return $formulae_result
     elif [[ $cask_result -ne 0 ]]; then
         return $cask_result
     fi
-    
+
     return $EXIT_SUCCESS
 }
 
@@ -691,11 +699,11 @@ parse_doctor_output() {
     local doctor_file="$1"
     local has_warnings=false
     local has_errors=false
-    
+
     if [[ ! -f "$doctor_file" ]]; then
         return 0
     fi
-    
+
     # Check for common warning patterns
     if grep -q "Warning:" "$doctor_file" 2>/dev/null; then
         has_warnings=true
@@ -727,7 +735,7 @@ parse_doctor_output() {
             echo "    ${BLUE}ℹ️  Safe to ignore if everything works fine${NC}"
         fi
     fi
-    
+
     # Check for actual errors (not just warnings)
     if grep -qE "(Error:|error:|failed)" "$doctor_file" 2>/dev/null; then
         if ! grep -q "just used to help" "$doctor_file" 2>/dev/null; then
@@ -736,7 +744,7 @@ parse_doctor_output() {
             grep -E "(Error:|error:|failed)" "$doctor_file" 2>/dev/null | head -3 | sed 's/^/  • /' || true
         fi
     fi
-    
+
     # Show summary
     if [[ "$has_errors" == true ]]; then
         return 1
@@ -752,20 +760,15 @@ run_doctor() {
 
     # Use .doctor.log extension so it opens in console viewer
     local doctor_file="${LOG_FILE%.log}.doctor.log"
-    local doctor_exit_code
-    
-    # Run brew doctor and capture exit code
-    if brew doctor --verbose > "$doctor_file" 2>&1; then
-        doctor_exit_code=0
-    else
-        doctor_exit_code=$?
-    fi
-    
+    # Run brew doctor (exit code intentionally ignored - warnings are informational)
+    # shellcheck disable=SC2015  # Using short-circuit OR for intentional non-critical behavior
+    brew doctor --verbose > "$doctor_file" 2>&1 && true || true
+
     # Parse the output for meaningful information
     local parse_result
     parse_doctor_output "$doctor_file" || parse_result=$?
     parse_result=${parse_result:-0}
-    
+
     case $parse_result in
         0)
             log_success "✓ Homebrew doctor: No issues found"
@@ -812,7 +815,6 @@ run_security_scan() {
     local security_json="${LOG_FILE%.log}.security.json"
     local security_detailed="${LOG_FILE%.log}.security.detailed.log"
     local vuln_count=0
-    local scan_exit_code
 
     # Run grype scan with severity filtering
     if [[ "$DRY_RUN" == true ]]; then
@@ -822,11 +824,9 @@ run_security_scan() {
 
     # Scan Homebrew Cellar for vulnerabilities (table format for quick view)
     log_verbose "Scanning $(brew --prefix)/Cellar for vulnerabilities..."
-    if grype dir:"$(brew --prefix)/Cellar" --only-fixed -q > "$security_file" 2>&1; then
-        scan_exit_code=0
-    else
-        scan_exit_code=$?
-    fi
+    # Exit code intentionally ignored - vulnerabilities are informational, not fatal
+    # shellcheck disable=SC2015  # Using short-circuit OR for intentional non-critical behavior
+    grype dir:"$(brew --prefix)/Cellar" --only-fixed -q > "$security_file" 2>&1 && true || true
 
     # Also generate JSON output for detailed analysis with file paths
     # Note: JSON scan can take longer, run in background if needed
@@ -907,9 +907,9 @@ cleanup_homebrew() {
         log_message "⏭️  Skipping cleanup (--skip-cleanup)"
         return $EXIT_SUCCESS
     fi
-    
+
     log_message "4️⃣  Cleaning up Homebrew..."
-    
+
     if [[ "$DRY_RUN" == true ]]; then
         log_message "🔍 DRY RUN: Would run cleanup"
         if ! brew cleanup --dry-run 2>/dev/null; then
@@ -917,14 +917,14 @@ cleanup_homebrew() {
         fi
         return $EXIT_SUCCESS
     fi
-    
+
     # Main cleanup
     if run_with_retry "brew cleanup --prune=all" "cleanup"; then
         log_success "✓ Cleanup completed"
     else
         log_warning "⚠️  Cleanup encountered issues"
     fi
-    
+
     # Check for unused dependencies only once
     local autoremove_preview
     if autoremove_preview=$(brew autoremove --dry-run 2>/dev/null) && \
@@ -947,7 +947,7 @@ cleanup_homebrew() {
 show_system_info() {
     log_message "📊 System Information:"
     log_message "  Homebrew: $(brew --version | head -1)"
-    
+
     if command -v sw_vers >/dev/null 2>&1; then
         log_message "  macOS: $(sw_vers -productVersion)"
     elif command -v lsb_release >/dev/null 2>&1; then
@@ -955,7 +955,7 @@ show_system_info() {
     else
         log_message "  OS: $(uname -s) $(uname -r)"
     fi
-    
+
     local disk_info
     disk_info=$(df -h "$(brew --prefix)" | awk 'NR==2 {print $4 " available"}')
     log_message "  Disk space: $disk_info"
@@ -965,7 +965,7 @@ create_clickable_link() {
     local file_path="$1"
     local display_name="${2:-$(basename "$file_path")}"
     local is_directory="${3:-false}"
-    
+
     # Check if we're in a terminal that supports clickable actions
     if [[ -n "${TERM_PROGRAM:-}" ]] && [[ -t 1 ]]; then
         case "${TERM_PROGRAM}" in
@@ -1002,30 +1002,30 @@ create_clickable_link() {
 
 show_file_links() {
     echo -e "\n${BLUE}📁 Quick Access Files:${NC}"
-    
+
     # Main log file
     echo -n "  📝 Main Log: "
     create_clickable_link "$LOG_FILE"
-    
+
     # Doctor report if it exists
     local doctor_file="${LOG_FILE%.log}.doctor.log"
     if [[ -f "$doctor_file" ]]; then
         echo -n "  🏥 Doctor Report: "
         create_clickable_link "$doctor_file"
     fi
-    
+
     # Backup file
     echo -n "  💾 Backup: "
     create_clickable_link "$BACKUP_FILE"
-    
+
     # Log directory
     echo -n "  📂 All Logs: "
     create_clickable_link "$LOG_DIR" "Open Log Directory" "true"
-    
+
     # Backup directory
     echo -n "  📦 All Backups: "
     create_clickable_link "$BACKUP_DIR" "Open Backup Directory" "true"
-    
+
     # Add interactive commands for quick access
     echo -e "\n${YELLOW}💡 Quick Commands (copy & paste):${NC}"
     echo -e "  ${GREEN}open \"$LOG_FILE\"${NC}  # Open main log"
@@ -1035,7 +1035,7 @@ show_file_links() {
     echo -e "  ${GREEN}open \"$BACKUP_FILE\"${NC}  # Open backup file"
     echo -e "  ${GREEN}open \"$LOG_DIR\"${NC}  # Open log directory"
     echo -e "  ${GREEN}open \"$BACKUP_DIR\"${NC}  # Open backup directory"
-    
+
     # Add real-time log viewing
     echo -e "\n${YELLOW}📊 Monitor Logs:${NC}"
     echo -e "  ${GREEN}tail -f \"$LOG_FILE\"${NC}  # Follow log in real-time"
@@ -1045,30 +1045,30 @@ show_file_links() {
 show_final_summary() {
     local end_time
     end_time=$(date '+%Y-%m-%d %H:%M:%S')
-    
+
     # Only clear screen if in interactive mode and not redirected
     if [[ "$AUTO_YES" == false && -t 1 ]]; then
         clear
     fi
-    
+
     print_header
     echo -e "${GREEN}📋 Update Summary${NC} ($end_time)"
     print_separator
-    
+
     echo "  ✓ System checks completed"
     echo "  ✓ Backup created: $(basename "$BACKUP_FILE")"
     echo "  ✓ Homebrew updated"
     echo "  ✓ Package updates processed"
     echo "  ✓ Health checks completed"
     [[ "$SKIP_CLEANUP" == false ]] && echo "  ✓ Cleanup performed"
-    
+
     # Show clickable file links
     show_file_links
-    
+
     print_separator
     echo -e "\n${GREEN}🎉 Homebrew Update Assistant completed successfully!${NC}"
     echo -e "${BLUE}✨ Your system is now up to date and optimized.${NC}"
-    
+
     # Only prompt if interactive and output is to terminal
     if [[ "$AUTO_YES" == false && -t 0 && -t 1 ]]; then
         echo -e "\n${YELLOW}📱 Press any key to close this window...${NC}"
@@ -1083,13 +1083,13 @@ show_final_summary() {
 ###################
 main() {
     local exit_code=$EXIT_SUCCESS
-    
+
     # Parse command line arguments first (needed for setup)
     parse_arguments "$@"
-    
+
     print_header
     setup_directories
-    
+
     # Load configuration after directories are created
     load_config
 
@@ -1101,17 +1101,15 @@ main() {
     check_prerequisites
     show_system_info
     print_separator
-    
+
     # System health checks with proper error handling
-    local network_status disk_status
-    network_status=0
+    local disk_status
     disk_status=0
-    
-    check_network || {
-        network_status=$?
-        log_warning "🌐 Continuing despite network issues..."
-    }
-    
+
+    # Network check is non-fatal, log warning and continue
+    # shellcheck disable=SC2015  # Using short-circuit OR for intentional non-critical behavior
+    check_network && true || log_warning "🌐 Continuing despite network issues..."
+
     check_disk_space || {
         disk_status=$?
         if [[ $disk_status -eq $EXIT_DISK_SPACE_ERROR ]]; then
@@ -1126,18 +1124,18 @@ main() {
             log_warning "💾 Continuing despite disk space warnings..."
         fi
     }
-    
+
     # Create backup
     create_backup
     print_separator
-    
+
     # Update process
     if ! update_homebrew; then
         exit_code=$?
         log_error "Homebrew update failed"
         exit "$exit_code"
     fi
-    
+
     # Check for updates and upgrade if available
     if check_outdated_packages; then
         show_upgrade_preview
@@ -1148,7 +1146,7 @@ main() {
     else
         log_verbose "No package updates needed, skipping upgrade phase"
     fi
-    
+
     print_separator
 
     # Maintenance and Security
@@ -1157,7 +1155,7 @@ main() {
     if ! cleanup_homebrew; then
         log_warning "Cleanup encountered issues but continuing..."
     fi
-    
+
     # Summary
     show_final_summary
 
