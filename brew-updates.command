@@ -597,16 +597,26 @@ check_outdated_packages() {
         outdated_casks=$(echo "$outdated_casks" | grep -vE "^($excluded_pattern)")
     fi
 
-    # Display results
+    # Display and log results
     if [[ -n "$outdated_formulae" ]]; then
         echo -e "\n📦 Outdated formulae:"
+        log_message "📦 Outdated formulae:"
         echo "$outdated_formulae" | sed 's/^/  /'
+        # Also log each package
+        while IFS= read -r package; do
+            log_message "  - $package"
+        done <<< "$outdated_formulae"
         has_updates=true
     fi
 
     if [[ -n "$outdated_casks" && "$SKIP_CASKS" == false ]]; then
         echo -e "\n🎲 Outdated casks:"
+        log_message "🎲 Outdated casks:"
         echo "$outdated_casks" | sed 's/^/  /'
+        # Also log each package
+        while IFS= read -r package; do
+            log_message "  - $package"
+        done <<< "$outdated_casks"
         has_updates=true
     fi
 
@@ -623,6 +633,7 @@ check_outdated_packages() {
     [[ -n "$outdated_casks" ]] && cask_count=$(echo "$outdated_casks" | wc -l | tr -d ' ')
     local total_updates=$((formula_count + cask_count))
 
+    log_message "📊 Total packages to update: $total_updates (formulae: $formula_count, casks: $cask_count)"
     send_notification "Homebrew Update" "📦 $total_updates package(s) available for update" "Purr"
 
     return $EXIT_SUCCESS  # Has updates
@@ -663,10 +674,24 @@ upgrade_packages() {
 
     local formulae_result=0
     local cask_result=0
+    local upgrade_log_file="${LOG_FILE%.log}.upgrades.log"
 
-    # Upgrade formulae
-    if run_with_retry "brew upgrade --formula" "formulae upgrade"; then
+    # Upgrade formulae - capture output to both display and log file
+    log_message "Starting formulae upgrade..."
+    if brew upgrade --formula 2>&1 | tee -a "$upgrade_log_file"; then
         log_success "✓ Formulae upgraded successfully"
+
+        # Extract and log upgraded packages from the output
+        if [[ -f "$upgrade_log_file" ]]; then
+            local upgraded_formulae
+            upgraded_formulae=$(grep -E "^==> Upgrading|was successfully upgraded" "$upgrade_log_file" | head -10)
+            if [[ -n "$upgraded_formulae" ]]; then
+                log_message "📦 Upgraded formulae:"
+                echo "$upgraded_formulae" | while IFS= read -r line; do
+                    log_message "  $line"
+                done
+            fi
+        fi
     else
         formulae_result=$?
         log_warning "⚠️  Some formulae upgrades failed"
@@ -674,12 +699,30 @@ upgrade_packages() {
 
     # Upgrade casks
     if [[ "$SKIP_CASKS" == false ]]; then
-        if run_with_retry "brew upgrade --cask" "cask upgrade"; then
+        log_message "Starting casks upgrade..."
+        if brew upgrade --cask 2>&1 | tee -a "$upgrade_log_file"; then
             log_success "✓ Casks upgraded successfully"
+
+            # Extract and log upgraded casks from the output
+            if [[ -f "$upgrade_log_file" ]]; then
+                local upgraded_casks
+                upgraded_casks=$(grep -E "^==> Upgrading|was successfully upgraded" "$upgrade_log_file" | tail -10)
+                if [[ -n "$upgraded_casks" ]]; then
+                    log_message "🎲 Upgraded casks:"
+                    echo "$upgraded_casks" | while IFS= read -r line; do
+                        log_message "  $line"
+                    done
+                fi
+            fi
         else
             cask_result=$?
             log_warning "⚠️  Some cask upgrades failed"
         fi
+    fi
+
+    # Log the full upgrade details file location
+    if [[ -f "$upgrade_log_file" ]]; then
+        log_message "📋 Full upgrade details: $upgrade_log_file"
     fi
 
     # Return worst exit code
@@ -868,11 +911,12 @@ HOMEBREW PACKAGE: \(.artifact.locations[0].path // "" | split("/") | .[4] // "Un
 
     # Count vulnerabilities found
     if [[ -f "$security_file" ]]; then
-        # Count lines that match severity levels (excluding header)
-        vuln_count=$(grep -E "(Critical|High|Medium)" "$security_file" 2>/dev/null | grep -v "^NAME" | wc -l | xargs)
+        # Count lines that match severity levels (excluding header and errors)
+        vuln_count=$(grep -E "(Critical|High|Medium)" "$security_file" 2>/dev/null | grep -v "^NAME" | grep -v "^error purl" | wc -l | xargs)
 
         if [[ $vuln_count -gt 0 ]]; then
             log_warning "⚠️  Found $vuln_count known vulnerabilities with fixes available"
+            log_message "Severity filter: $SECURITY_SCAN_SEVERITY"
             echo -e "  ${YELLOW}Severity filter: $SECURITY_SCAN_SEVERITY${NC}"
             echo -e "  ${BLUE}Summary report: $(create_clickable_link "$security_file")${NC}"
 
@@ -880,16 +924,38 @@ HOMEBREW PACKAGE: \(.artifact.locations[0].path // "" | split("/") | .[4] // "Un
                 echo -e "  ${BLUE}Detailed report with file paths: $(create_clickable_link "$security_detailed")${NC}"
             fi
 
-            # Show top 5 high-severity vulnerabilities
-            if [[ "$VERBOSE" == true ]]; then
-                echo -e "\n  ${YELLOW}Top vulnerabilities:${NC}"
-                head -15 "$security_file" | tail -n +2 | while IFS= read -r line; do
-                    echo -e "  $line"
+            # Show and LOG top vulnerabilities (filter out grype errors)
+            local top_vulns
+            top_vulns=$(grep -E "(Critical|High|Medium)" "$security_file" 2>/dev/null | grep -v "^NAME" | grep -v "^error purl" | head -10)
+
+            if [[ -n "$top_vulns" ]]; then
+                log_message "🔒 Top security vulnerabilities found:"
+                echo "$top_vulns" | while IFS= read -r line; do
+                    log_message "  $line"
                 done
+            fi
+
+            # Always show top 10 in console (even without verbose)
+            echo -e "\n  ${YELLOW}Top vulnerabilities:${NC}"
+            echo "$top_vulns" | while IFS= read -r line; do
+                echo -e "  $line"
+            done
+
+            # Parse detailed report for actionable info if available
+            if [[ -f "$security_detailed" ]]; then
+                local package_summary
+                package_summary=$(grep "^HOMEBREW PACKAGE:" "$security_detailed" 2>/dev/null | sort -u | head -5)
+                if [[ -n "$package_summary" ]]; then
+                    log_message "📦 Affected Homebrew packages:"
+                    echo "$package_summary" | while IFS= read -r line; do
+                        log_message "  $line"
+                    done
+                fi
             fi
 
             # Suggest running brew upgrade
             echo -e "\n  ${GREEN}💡 Tip: Run 'brew upgrade' to update vulnerable packages${NC}"
+            log_message "💡 Tip: Run 'brew upgrade' to update vulnerable packages"
         else
             log_success "✓ No known vulnerabilities found (severity: $SECURITY_SCAN_SEVERITY)"
             log_verbose "Full scan report: $security_file"
@@ -1007,6 +1073,25 @@ show_file_links() {
     echo -n "  📝 Main Log: "
     create_clickable_link "$LOG_FILE"
 
+    # Upgrade log if it exists
+    local upgrade_file="${LOG_FILE%.log}.upgrades.log"
+    if [[ -f "$upgrade_file" ]]; then
+        echo -n "  📦 Upgrade Details: "
+        create_clickable_link "$upgrade_file"
+    fi
+
+    # Security reports if they exist
+    local security_file="${LOG_FILE%.log}.security.log"
+    local security_detailed="${LOG_FILE%.log}.security.detailed.log"
+    if [[ -f "$security_file" ]]; then
+        echo -n "  🔒 Security Scan: "
+        create_clickable_link "$security_file"
+    fi
+    if [[ -f "$security_detailed" ]]; then
+        echo -n "  🔍 Security Details: "
+        create_clickable_link "$security_detailed"
+    fi
+
     # Doctor report if it exists
     local doctor_file="${LOG_FILE%.log}.doctor.log"
     if [[ -f "$doctor_file" ]]; then
@@ -1029,6 +1114,12 @@ show_file_links() {
     # Add interactive commands for quick access
     echo -e "\n${YELLOW}💡 Quick Commands (copy & paste):${NC}"
     echo -e "  ${GREEN}open \"$LOG_FILE\"${NC}  # Open main log"
+    if [[ -f "$upgrade_file" ]]; then
+        echo -e "  ${GREEN}open \"$upgrade_file\"${NC}  # Open upgrade details"
+    fi
+    if [[ -f "$security_detailed" ]]; then
+        echo -e "  ${GREEN}open \"$security_detailed\"${NC}  # Open security details"
+    fi
     if [[ -f "${LOG_FILE%.log}.doctor.log" ]]; then
         echo -e "  ${GREEN}open \"${LOG_FILE%.log}.doctor.log\"${NC}  # Open doctor report"
     fi

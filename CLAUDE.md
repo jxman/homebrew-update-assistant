@@ -23,6 +23,29 @@ This is the **Homebrew Update Assistant** - a production-ready bash script that 
 
 ## Development Commands
 
+### Deployment Process
+
+**CRITICAL**: This project has TWO locations:
+- **Source/Development**: `~/Documents/my-projects/scripts/brewUpdates/` (edit here)
+- **Production/Execution**: `~/bin/` (LaunchAgent runs from here)
+
+**After making ANY changes to `brew-updates.command`, you MUST deploy:**
+
+```bash
+cd ~/Documents/my-projects/scripts/brewUpdates
+./scripts/setup.sh
+```
+
+The `scripts/setup.sh` script will:
+- Copy updated script to `~/bin/`
+- Reload the LaunchAgent
+- Verify checksums match
+- Create backups of old versions
+
+**NEVER edit `~/bin/brew-updates.command` directly** - always edit the source and deploy.
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for full deployment workflow.
+
 ### Testing
 ```bash
 # Test without making changes (recommended for development)
@@ -36,6 +59,12 @@ This is the **Homebrew Update Assistant** - a production-ready bash script that 
 # Test error handling (simulate network issues, etc.)
 export BREW_UPDATE_TIMEOUT=5  # Short timeout for testing
 ./brew-updates.command --dry-run
+
+# Test the deployed version
+~/bin/brew-updates.command --dry-run --verbose
+
+# Verify source and deployed versions match
+md5 ~/Documents/my-projects/scripts/brewUpdates/brew-updates.command ~/bin/brew-updates.command
 ```
 
 ### Code Validation
@@ -45,6 +74,9 @@ bash -n brew-updates.command
 
 # Use shellcheck if available (brew install shellcheck)
 shellcheck brew-updates.command
+
+# After validation, deploy changes
+./scripts/setup.sh
 ```
 
 ## Code Structure

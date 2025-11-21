@@ -169,14 +169,17 @@ The Homebrew Update Assistant follows a modular, pipeline-based architecture wit
 │                         Output Files                              │
 ├───────────────────────────────────────────────────────────────────┤
 │  ~/.brew_logs/                                                    │
-│  ├── brew_update_YYYYMMDD_HHMMSS.log                            │
-│  ├── brew_update_YYYYMMDD_HHMMSS.doctor.log                     │
-│  ├── brew_update_YYYYMMDD_HHMMSS.security.log                   │
-│  ├── brew_update_YYYYMMDD_HHMMSS.security.json                  │
-│  └── brew_update_YYYYMMDD_HHMMSS.security.detailed.log          │
+│  ├── brew_update_YYYYMMDD_HHMMSS.log           # Main log       │
+│  ├── brew_update_YYYYMMDD_HHMMSS.upgrades.log  # Upgrade details│
+│  ├── brew_update_YYYYMMDD_HHMMSS.doctor.log    # Health check   │
+│  ├── brew_update_YYYYMMDD_HHMMSS.security.log  # Vuln scan      │
+│  ├── brew_update_YYYYMMDD_HHMMSS.security.json # Raw JSON data  │
+│  ├── brew_update_YYYYMMDD_HHMMSS.security.detailed.log # Paths  │
+│  ├── launchagent.log                            # LaunchAgent    │
+│  └── launchagent_error.log                      # LA errors      │
 │                                                                   │
 │  ~/.brew_backups/                                                 │
-│  └── brew_backup_YYYYMMDD_HHMMSS                                │
+│  └── brew_backup_YYYYMMDD_HHMMSS               # Brewfiles      │
 └───────────────────────────────────────────────────────────────────┘
 ```
 
@@ -202,7 +205,24 @@ The Homebrew Update Assistant follows a modular, pipeline-based architecture wit
 
 ## 🚀 Quick Start
 
-### Option 1: Direct Download (Recommended)
+### Option 1: Clone Repository (Recommended)
+```bash
+# Clone the repository
+git clone https://github.com/johxan/homebrew-update-assistant.git
+cd homebrew-update-assistant
+
+# Install with setup script (handles everything automatically)
+./scripts/setup.sh
+```
+
+The setup script will:
+- ✅ Copy `brew-updates.command` to `~/bin/`
+- ✅ Install LaunchAgent for daily automation
+- ✅ Create necessary directories
+- ✅ Set up configuration file
+- ✅ Verify all dependencies
+
+### Option 2: Manual Installation
 ```bash
 # Download the script
 curl -fsSL https://raw.githubusercontent.com/johxan/homebrew-update-assistant/main/brew-updates.command -o brew-updates.command
@@ -211,17 +231,6 @@ curl -fsSL https://raw.githubusercontent.com/johxan/homebrew-update-assistant/ma
 chmod +x brew-updates.command
 
 # Run it
-./brew-updates.command
-```
-
-### Option 2: Clone Repository
-```bash
-# Clone the repository
-git clone https://github.com/johxan/homebrew-update-assistant.git
-cd homebrew-update-assistant
-
-# Make executable and run
-chmod +x brew-updates.command
 ./brew-updates.command
 ```
 
@@ -234,6 +243,25 @@ sudo chmod +x /usr/local/bin/brew-updates
 # Run from anywhere
 brew-updates --help
 ```
+
+### Automated Setup (Recommended for Daily Use)
+
+After installation, enable automation:
+
+```bash
+cd homebrew-update-assistant
+./scripts/setup.sh  # Installs LaunchAgent for daily 3 AM updates
+```
+
+**LaunchAgent Features:**
+- 🕐 Runs automatically daily at 3:00 AM
+- 🔔 macOS notifications for update status
+- 📝 Complete logging to `~/.brew_logs/`
+- 🔄 Automatic catch-up if Mac was sleeping
+- 📦 Detailed package upgrade tracking
+- 🔒 Security vulnerability scanning
+
+For detailed deployment and customization options, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## 📖 Usage
 
@@ -620,10 +648,15 @@ Notifications use native macOS sounds:
 
 ### Generated Files
 ```
-~/.brew_logs/                          # Log directory
-├── brew_update_YYYYMMDD_HHMMSS.log   # Main execution log
-├── brew_update_YYYYMMDD_HHMMSS.doctor.log  # Homebrew doctor report
-└── launchagent.log                   # LaunchAgent execution log (if enabled)
+~/.brew_logs/                                      # Log directory
+├── brew_update_YYYYMMDD_HHMMSS.log               # Main execution log
+├── brew_update_YYYYMMDD_HHMMSS.upgrades.log      # Package upgrade details (NEW)
+├── brew_update_YYYYMMDD_HHMMSS.doctor.log        # Homebrew doctor report
+├── brew_update_YYYYMMDD_HHMMSS.security.log      # Security scan summary
+├── brew_update_YYYYMMDD_HHMMSS.security.json     # Security scan raw data
+├── brew_update_YYYYMMDD_HHMMSS.security.detailed.log  # Vulnerabilities with file paths
+├── launchagent.log                                # LaunchAgent stdout (if enabled)
+└── launchagent_error.log                          # LaunchAgent stderr (if enabled)
 
 ~/.brew_backups/                       # Backup directory
 ├── brew_backup_YYYYMMDD_HHMMSS       # Brewfile backups
@@ -928,31 +961,51 @@ For detailed contribution guidelines, see [CONTRIBUTING.md](docs/CONTRIBUTING.md
 ## 📁 Project Structure
 
 ```
-Brew Updates/
+homebrew-update-assistant/
 ├── brew-updates.command          # Main script (production-ready)
-├── README.md                      # This file
+├── scripts/                       # Management and utility scripts
+│   ├── setup.sh                   # Automated installation & deployment
+│   ├── uninstall.sh               # Clean uninstallation script
+│   └── fix-vulnerabilities.sh     # Automated vulnerability remediation
+├── com.user.brew-update.plist     # LaunchAgent template
+├── README.md                      # This file (complete documentation)
+├── DEPLOYMENT.md                  # Deployment and update guide
 ├── LICENSE                        # MIT License
 ├── CLAUDE.md                      # Claude Code project instructions
-├── docs/                          # Documentation
+├── docs/                          # Additional documentation
 │   ├── CHANGELOG.md              # Version history and changes
 │   ├── IMPROVEMENTS.md           # Planned improvements and roadmap
 │   ├── CONTRIBUTING.md           # Contribution guidelines
 │   ├── SECURITY_SETUP_SUMMARY.md # Security scanning setup guide
 │   └── VULNERABILITY_FIX_QUICKSTART.md  # Quick vulnerability fix guide
-├── examples/                      # Configuration examples
-│   ├── brew_update_config.example  # Sample configuration file
-│   └── com.user.brew-update.plist.sample  # LaunchAgent template
-└── scripts/                       # Helper scripts
-    └── fix-vulnerabilities.sh     # Automated vulnerability remediation
+└── examples/                      # Configuration examples
+    ├── brew_update_config.example  # Sample configuration file
+    └── com.user.brew-update.plist.sample  # LaunchAgent template (deprecated)
 ```
 
 ### File Descriptions
 
 **Core Files:**
-- `brew-updates.command` - Main executable script (~950 lines)
+- `brew-updates.command` - Main executable script (~1260 lines)
 - `README.md` - Complete documentation and usage guide
+- `DEPLOYMENT.md` - Deployment, update, and uninstall guide
 - `LICENSE` - MIT License details
 - `CLAUDE.md` - Instructions for Claude Code AI assistant
+
+**Management Scripts (scripts/):**
+- `setup.sh` - Automated installation and deployment
+  - Copies script to `~/bin/`
+  - Installs LaunchAgent
+  - Creates directories
+  - Verifies checksums
+- `uninstall.sh` - Clean uninstallation
+  - Removes script and LaunchAgent
+  - Optional: Remove logs, backups, config
+  - Dry-run support
+- `fix-vulnerabilities.sh` - Automated vulnerability remediation
+  - Updates packages with known vulnerabilities
+  - Runs security scans
+  - Shows before/after comparison
 
 **Documentation (docs/):**
 - `CHANGELOG.md` - Version history, features added, and changes
@@ -963,10 +1016,7 @@ Brew Updates/
 
 **Examples (examples/):**
 - `brew_update_config.example` - Sample `~/.brew_update_config` with all options
-- `com.user.brew-update.plist.sample` - macOS LaunchAgent template for automation
-
-**Scripts (scripts/):**
-- `fix-vulnerabilities.sh` - Automatically updates packages with known vulnerabilities
+- `com.user.brew-update.plist.sample` - macOS LaunchAgent template (superseded by setup.sh)
 
 ### Runtime Directories
 
