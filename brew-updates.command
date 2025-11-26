@@ -684,7 +684,7 @@ upgrade_packages() {
         # Extract and log upgraded packages from the output
         if [[ -f "$upgrade_log_file" ]]; then
             local upgraded_formulae
-            upgraded_formulae=$(grep -E "^==> Upgrading|was successfully upgraded" "$upgrade_log_file" | head -10)
+            upgraded_formulae=$(grep -E "^==> Upgrading|^🍺" "$upgrade_log_file" | head -10)
             if [[ -n "$upgraded_formulae" ]]; then
                 log_message "📦 Upgraded formulae:"
                 echo "$upgraded_formulae" | while IFS= read -r line; do
