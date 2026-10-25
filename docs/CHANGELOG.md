@@ -5,6 +5,44 @@ All notable changes to the Homebrew Update Assistant will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-10-25
+
+### UI Groundwork (Phase 0)
+
+Prepares the CLI to be driven by a SwiftUI app while keeping the scheduled LaunchAgent run
+as the source of truth.
+
+### Added
+- Machine-readable run summary `brew_update_<RUN_ID>.summary.json`, documented in `docs/run-summary-schema.md`
+- Run lock (`~/.brew_logs/.brew-updates.lock/`) so manual and scheduled runs never overlap; exit code `5` when a run is already in progress
+- `--packages LIST` to upgrade selected packages only
+- `--no-color` flag and `NO_COLOR` environment variable support
+- `--version` flag and `SCRIPT_VERSION`
+- `BREW_UPDATE_TRIGGER` env var; runs started by the LaunchAgent are recorded as `scheduled`
+- SIGINT/SIGTERM handling: cancelled runs release the lock and record `status: cancelled`
+- `scripts/setup.sh --reset-launchagent`
+
+### Changed
+- Upgrades use explicit package names. Pinned and excluded packages are reported as skipped
+- Upgrade results are confirmed by re-checking `brew outdated`, and logs show `name (old) → new`
+- All files from a run share one `RUN_ID`
+- `scripts/setup.sh` keeps an existing LaunchAgent plist, so the schedule survives re-deploys, and uses `launchctl bootout`/`bootstrap`
+- `SKIP_CASKS_BY_DEFAULT` and `CLEANUP_BY_DEFAULT` now take effect
+
+### Removed
+- Retired config keys `AUTO_UPGRADE`, `LOG_LEVEL` and `BACKUP_RETENTION_DAYS`, which never had any effect. They are ignored if present
+
+### Fixed
+- `EXCLUDED_FORMULAE` / `EXCLUDED_CASKS` were only hidden from the output. `brew upgrade` still upgraded the excluded packages
+- Exclusions matched by prefix (excluding `node` also hid `node@20`)
+- A failed `brew update` was treated as success: `run_with_retry` always returned 0 and never retried, and `main` exited 0
+- Partial upgrade failures were reported with exit code 0
+- `.security.json` reports were never deleted by log retention
+- Log cleanup ran before the config was loaded, so `LOG_RETENTION_DAYS` was ignored
+- Config values with quotes or inline comments (as in the example config) failed validation
+- `BREW_UPDATE_TIMEOUT` / `BREW_UPDATE_MAX_RETRIES` crashed the script (they reassigned readonly variables)
+- `scripts/setup.sh` reset the schedule to 3:00 AM on every deploy (the template path did not exist)
+
 ## [2.1.0] - 2024-11-08
 
 ### 🎉 Feature Release - Automation & Notifications

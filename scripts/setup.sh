@@ -3,10 +3,12 @@
 # Setup script for Homebrew Update Assistant
 # This script:
 # 1. Copies the latest brew-updates.command to ~/bin
-# 2. Installs/updates the LaunchAgent configuration
+# 2. Installs the LaunchAgent (an existing one is kept so its schedule survives re-deploys)
 # 3. Ensures all required directories exist
 #
-# Use --uninstall to remove the installation
+# Options:
+#   --reset-launchagent   Regenerate the LaunchAgent plist with defaults (daily 3:00 AM)
+#   --uninstall           Remove the installation
 
 set -e  # Exit on error
 set -u  # Exit on undefined variable
@@ -30,15 +32,39 @@ readonly BLUE='\033[0;34m'
 readonly NC='\033[0m' # No Color
 
 # Paths
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+readonly PROJECT_ROOT
 readonly SOURCE_SCRIPT="${PROJECT_ROOT}/brew-updates.command"
 readonly DEST_SCRIPT="${HOME}/bin/brew-updates.command"
-readonly LAUNCHAGENT_PLIST="${HOME}/Library/LaunchAgents/com.user.brew-update.plist"
-readonly LAUNCHAGENT_TEMPLATE="${PROJECT_ROOT}/com.user.brew-update.plist"
+readonly LAUNCHAGENT_LABEL="com.user.brew-update"
+readonly LAUNCHAGENT_PLIST="${HOME}/Library/LaunchAgents/${LAUNCHAGENT_LABEL}.plist"
+LAUNCHAGENT_DOMAIN="gui/$(id -u)"
+readonly LAUNCHAGENT_DOMAIN
 readonly LOG_DIR="${HOME}/.brew_logs"
 readonly BACKUP_DIR="${HOME}/.brew_backups"
 readonly CONFIG_FILE="${HOME}/.brew_update_config"
+
+RESET_LAUNCHAGENT=false
+for arg in "$@"; do
+    case "$arg" in
+        --reset-launchagent)
+            RESET_LAUNCHAGENT=true
+            ;;
+        -h|--help)
+            echo "Usage: $(basename "$0") [--reset-launchagent] [--uninstall [options]]"
+            echo "  --reset-launchagent  Regenerate the LaunchAgent with defaults (daily 3:00 AM),"
+            echo "                       discarding any custom schedule"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $arg" >&2
+            exit 1
+            ;;
+    esac
+done
+readonly RESET_LAUNCHAGENT
 
 # Helper functions
 print_header() {
@@ -94,7 +120,8 @@ install_script() {
 
     # Backup existing script if it exists
     if [[ -f "$DEST_SCRIPT" ]]; then
-        local backup_file="${DEST_SCRIPT}.backup.$(date +%Y%m%d_%H%M%S)"
+        local backup_file
+        backup_file="${DEST_SCRIPT}.backup.$(date +%Y%m%d_%H%M%S)"
         cp "$DEST_SCRIPT" "$backup_file"
         print_info "Backed up existing script to: $(basename "$backup_file")"
     fi
@@ -108,13 +135,15 @@ install_script() {
         print_success "Script installed: $DEST_SCRIPT"
 
         # Show file sizes
-        local source_size=$(stat -f%z "$SOURCE_SCRIPT" 2>/dev/null || echo "unknown")
-        local dest_size=$(stat -f%z "$DEST_SCRIPT" 2>/dev/null || echo "unknown")
+        local source_size dest_size
+        source_size=$(stat -f%z "$SOURCE_SCRIPT" 2>/dev/null || echo "unknown")
+        dest_size=$(stat -f%z "$DEST_SCRIPT" 2>/dev/null || echo "unknown")
         print_info "Source size: ${source_size} bytes, Installed size: ${dest_size} bytes"
 
         # Compare checksums
-        local source_md5=$(md5 -q "$SOURCE_SCRIPT" 2>/dev/null || echo "")
-        local dest_md5=$(md5 -q "$DEST_SCRIPT" 2>/dev/null || echo "")
+        local source_md5 dest_md5
+        source_md5=$(md5 -q "$SOURCE_SCRIPT" 2>/dev/null || echo "")
+        dest_md5=$(md5 -q "$DEST_SCRIPT" 2>/dev/null || echo "")
 
         if [[ "$source_md5" == "$dest_md5" ]]; then
             print_success "Checksum verification passed ✓"
@@ -128,29 +157,42 @@ install_script() {
     fi
 }
 
-# Create or update LaunchAgent plist
+# Describe the plist's schedule for display (simple daily schedules only)
+describe_schedule() {
+    local hour minute
+    if hour=$(plutil -extract StartCalendarInterval.Hour raw "$LAUNCHAGENT_PLIST" 2>/dev/null) && \
+       minute=$(plutil -extract StartCalendarInterval.Minute raw "$LAUNCHAGENT_PLIST" 2>/dev/null); then
+        printf 'Daily at %02d:%02d' "$hour" "$minute"
+    else
+        echo "Custom (see StartCalendarInterval in $(basename "$LAUNCHAGENT_PLIST"))"
+    fi
+}
+
+# Install the LaunchAgent plist. An existing valid plist is kept as-is so a schedule
+# edited by hand or by the UI survives re-deploys; --reset-launchagent regenerates it.
 install_launchagent() {
     echo -e "\n${BLUE}⚙️  Configuring LaunchAgent...${NC}"
 
-    # Backup existing plist if it exists
+    local write_plist=true
     if [[ -f "$LAUNCHAGENT_PLIST" ]]; then
-        local backup_plist="${LAUNCHAGENT_PLIST}.backup.$(date +%Y%m%d_%H%M%S)"
-        cp "$LAUNCHAGENT_PLIST" "$backup_plist"
-        print_info "Backed up existing plist to: $(basename "$backup_plist")"
+        if [[ "$RESET_LAUNCHAGENT" == true ]]; then
+            print_info "Resetting LaunchAgent to defaults (--reset-launchagent)"
+        elif plutil -lint -s "$LAUNCHAGENT_PLIST" >/dev/null 2>&1; then
+            write_plist=false
+            print_success "Keeping existing LaunchAgent configuration (schedule preserved)"
+        else
+            print_warning "Existing LaunchAgent plist is invalid - regenerating"
+        fi
 
-        # Unload current agent if running
-        if launchctl list | grep -q "com.user.brew-update"; then
-            print_info "Unloading current LaunchAgent..."
-            launchctl unload "$LAUNCHAGENT_PLIST" 2>/dev/null || true
+        if [[ "$write_plist" == true ]]; then
+            local backup_plist
+            backup_plist="${LAUNCHAGENT_PLIST}.backup.$(date +%Y%m%d_%H%M%S)"
+            cp "$LAUNCHAGENT_PLIST" "$backup_plist"
+            print_info "Backed up existing plist to: $(basename "$backup_plist")"
         fi
     fi
 
-    # Use template if available, otherwise create one
-    if [[ -f "$LAUNCHAGENT_TEMPLATE" ]]; then
-        cp "$LAUNCHAGENT_TEMPLATE" "$LAUNCHAGENT_PLIST"
-        print_success "Installed LaunchAgent from template"
-    else
-        # Create plist from scratch
+    if [[ "$write_plist" == true ]]; then
         cat > "$LAUNCHAGENT_PLIST" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -208,19 +250,20 @@ EOF
         print_success "Created LaunchAgent configuration"
     fi
 
-    # Load the agent
-    print_info "Loading LaunchAgent..."
-    if launchctl load "$LAUNCHAGENT_PLIST" 2>/dev/null; then
+    # Reload so launchd picks up the current plist (bootout fails harmlessly if not loaded)
+    print_info "Reloading LaunchAgent..."
+    launchctl bootout "${LAUNCHAGENT_DOMAIN}/${LAUNCHAGENT_LABEL}" 2>/dev/null || true
+    if launchctl bootstrap "$LAUNCHAGENT_DOMAIN" "$LAUNCHAGENT_PLIST" 2>/dev/null; then
         print_success "LaunchAgent loaded successfully"
     else
-        print_warning "LaunchAgent may already be loaded (this is OK)"
+        print_warning "launchctl bootstrap reported an error - checking status"
     fi
 
     # Verify it's loaded
-    if launchctl list | grep -q "com.user.brew-update"; then
-        print_success "LaunchAgent is active ✓"
+    if launchctl print "${LAUNCHAGENT_DOMAIN}/${LAUNCHAGENT_LABEL}" >/dev/null 2>&1; then
+        print_success "LaunchAgent is active ✓ ($(describe_schedule))"
     else
-        print_warning "LaunchAgent not found in list - may need manual loading"
+        print_warning "LaunchAgent is not loaded - try: launchctl bootstrap ${LAUNCHAGENT_DOMAIN} ${LAUNCHAGENT_PLIST}"
     fi
 }
 
@@ -242,22 +285,19 @@ SECURITY_SCAN_ENABLED=true
 SECURITY_SCAN_SEVERITY=HIGH,CRITICAL
 
 # Logging
-LOG_LEVEL=INFO
 LOG_RETENTION_DAYS=30
 
 # Notifications (macOS only)
 ENABLE_NOTIFICATIONS=true
 
-# Backup settings
-BACKUP_RETENTION_DAYS=30
+# Backup settings (number of Brewfile backups to keep)
 MAX_BACKUP_COUNT=5
 
 # Package exclusions (space-separated)
 #EXCLUDED_FORMULAE=""
 #EXCLUDED_CASKS=""
 
-# Automatic upgrades
-#AUTO_UPGRADE=false
+# Run defaults
 #SKIP_CASKS_BY_DEFAULT=false
 #CLEANUP_BY_DEFAULT=true
 EOF
@@ -307,7 +347,7 @@ show_summary() {
     echo -e "\n${BLUE}📋 Summary:${NC}"
     echo "  ✓ Script installed to: $DEST_SCRIPT"
     echo "  ✓ LaunchAgent configured: $LAUNCHAGENT_PLIST"
-    echo "  ✓ Next scheduled run: Daily at 3:00 AM"
+    echo "  ✓ Schedule: $(describe_schedule)"
     echo "  ✓ Logs directory: $LOG_DIR"
     echo "  ✓ Backups directory: $BACKUP_DIR"
     echo "  ✓ Config file: $CONFIG_FILE"
@@ -320,16 +360,19 @@ show_summary() {
     echo "    ${GREEN}~/bin/brew-updates.command --yes --verbose${NC}"
     echo ""
     echo "  Check LaunchAgent status:"
-    echo "    ${GREEN}launchctl list | grep brew-update${NC}"
+    echo "    ${GREEN}launchctl print ${LAUNCHAGENT_DOMAIN}/${LAUNCHAGENT_LABEL}${NC}"
     echo ""
     echo "  Manually trigger LaunchAgent:"
-    echo "    ${GREEN}launchctl start com.user.brew-update${NC}"
+    echo "    ${GREEN}launchctl kickstart ${LAUNCHAGENT_DOMAIN}/${LAUNCHAGENT_LABEL}${NC}"
     echo ""
     echo "  View recent logs:"
     echo "    ${GREEN}tail -50 ${LOG_DIR}/launchagent.log${NC}"
     echo ""
     echo "  Unload LaunchAgent:"
-    echo "    ${GREEN}launchctl unload ${LAUNCHAGENT_PLIST}${NC}"
+    echo "    ${GREEN}launchctl bootout ${LAUNCHAGENT_DOMAIN}/${LAUNCHAGENT_LABEL}${NC}"
+    echo ""
+    echo "  Reset LaunchAgent to defaults (daily 3:00 AM):"
+    echo "    ${GREEN}./scripts/setup.sh --reset-launchagent${NC}"
     echo ""
     echo "  Uninstall (remove everything):"
     echo "    ${GREEN}./scripts/setup.sh --uninstall --all${NC}"

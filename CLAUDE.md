@@ -8,7 +8,10 @@ This is the **Homebrew Update Assistant** - a production-ready bash script that 
 
 ### Core Architecture
 
-- **Single File Design**: `brew-updates.command` - Complete standalone bash script (~940 lines)
+- **Single File Design**: `brew-updates.command` - Complete standalone bash script (~1,600 lines)
+- **Bash 3.2 Compatible**: The LaunchAgent runs it with macOS `/bin/bash` 3.2, so no associative arrays or `mapfile`, and guard empty array expansions under `set -u`
+- **UI Contract**: Each run writes `~/.brew_logs/brew_update_<RUN_ID>.summary.json` for the planned SwiftUI app. See [docs/run-summary-schema.md](docs/run-summary-schema.md); bump `SUMMARY_SCHEMA_VERSION` on breaking changes
+- **Run Lock**: `~/.brew_logs/.brew-updates.lock/` prevents overlapping runs (exit code 5)
 - **Configuration System**: Optional `~/.brew_update_config` for user customization
 - **Logging & Backups**: Automatic file management in `~/.brew_logs/` and `~/.brew_backups/`
 - **Terminal Integration**: Smart detection and clickable links for supported terminals
@@ -38,7 +41,8 @@ cd ~/Documents/my-projects/scripts/brewUpdates
 
 The `scripts/setup.sh` script will:
 - Copy updated script to `~/bin/`
-- Reload the LaunchAgent
+- Keep an existing LaunchAgent plist so a custom schedule survives (`--reset-launchagent` regenerates the default)
+- Reload the LaunchAgent (`launchctl bootout` + `bootstrap`)
 - Verify checksums match
 - Create backups of old versions
 
@@ -104,6 +108,8 @@ shellcheck brew-updates.command
   - `2`: Network error
   - `3`: Disk space error
   - `4`: Homebrew error
+  - `5`: Another run is already in progress
+- **Capturing exit codes**: Use `cmd || rc=$?`, never `if ! cmd; then rc=$?` (inside that branch `$?` is always 0)
 - **Retry Logic**: Exponential backoff with configurable max retries
 - **Graceful Degradation**: Continue operation when non-critical components fail
 
@@ -112,14 +118,19 @@ shellcheck brew-updates.command
 ### Environment Variables
 - `BREW_UPDATE_TIMEOUT`: Command timeout (default: 300s)
 - `BREW_UPDATE_MAX_RETRIES`: Retry attempts (default: 3)
-- `BREW_UPDATE_DEBUG`: Enable debug mode
+- `BREW_UPDATE_TRIGGER`: Label for the run summary's `trigger` field (e.g. `app`)
+- `NO_COLOR`: Disable colored output (same as `--no-color`)
 
 ### Config File Format
 The `~/.brew_update_config` file uses key=value format with validation:
-- `BACKUP_RETENTION_DAYS`: Backup cleanup threshold
-- `EXCLUDED_FORMULAE`: Space-separated package names to skip
-- `EXCLUDED_CASKS`: Space-separated cask names to skip
-- `LOG_LEVEL`: DEBUG, INFO, WARNING, ERROR
+- `MAX_BACKUP_COUNT`: Number of Brewfile backups to keep
+- `LOG_RETENTION_DAYS`: Delete per-run files older than this
+- `EXCLUDED_FORMULAE`: Space-separated package names to skip (exact match)
+- `EXCLUDED_CASKS`: Space-separated cask names to skip (exact match)
+- `SKIP_CASKS_BY_DEFAULT` / `CLEANUP_BY_DEFAULT`: Run defaults
+- `SECURITY_SCAN_ENABLED`, `SECURITY_SCAN_SEVERITY`, `ENABLE_NOTIFICATIONS`
+- Values may be quoted and may carry a trailing ` # comment`
+- Retired (ignored): `AUTO_UPGRADE`, `LOG_LEVEL`, `BACKUP_RETENTION_DAYS`
 
 ## Important Implementation Notes
 

@@ -294,7 +294,24 @@ For detailed deployment and customization options, see [DEPLOYMENT.md](DEPLOYMEN
 | `-s, --skip-casks` | Skip cask updates (formulae only) |
 | `-c, --skip-cleanup` | Skip cleanup operations |
 | `--skip-security-scan` | Skip vulnerability scanning (requires Grype) |
+| `-p, --packages LIST` | Only upgrade these packages (space- or comma-separated); exclusions and pins still apply |
+| `--no-color` | Disable colored output (also honors the `NO_COLOR` environment variable) |
+| `--version` | Print the script version and exit |
 | `-h, --help` | Show help message with examples |
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | General error, or some package upgrades failed |
+| `2` | Network error |
+| `3` | Insufficient disk space |
+| `4` | Homebrew error (e.g. `brew update` failed after retries) |
+| `5` | Another run is already in progress (runs never overlap) |
+
+Each run also writes a machine-readable `brew_update_<RUN_ID>.summary.json` to `~/.brew_logs/`.
+See [docs/run-summary-schema.md](docs/run-summary-schema.md).
 
 ### Advanced Usage Examples
 
@@ -333,19 +350,14 @@ Create `~/.brew_update_config` to customize behavior:
 # Homebrew Update Assistant Configuration
 
 # Backup settings
-BACKUP_RETENTION_DAYS=30
-MAX_BACKUP_COUNT=10
+MAX_BACKUP_COUNT=10  # Number of Brewfile backups to keep
 
 # Log retention
-LOG_RETENTION_DAYS=30  # Auto-delete logs older than this
+LOG_RETENTION_DAYS=30  # Auto-delete per-run files (logs, reports, summaries) older than this
 
-# Update preferences
-AUTO_UPGRADE=false
-SKIP_CASKS_BY_DEFAULT=false
-CLEANUP_BY_DEFAULT=true
-
-# Logging
-LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
+# Run defaults
+SKIP_CASKS_BY_DEFAULT=false  # true = behave as if --skip-casks was passed
+CLEANUP_BY_DEFAULT=true      # false = behave as if --skip-cleanup was passed
 
 # Notifications (macOS only)
 ENABLE_NOTIFICATIONS=true  # Enable macOS notification center alerts
@@ -359,6 +371,14 @@ EXCLUDED_FORMULAE="php@7.4 node@14 python@3.9"
 EXCLUDED_CASKS="docker-desktop virtualbox"
 ```
 
+Values may be quoted and may have a trailing ` # comment`. Exclusions match exact package
+names, so excluding `node` does not exclude `node@20`. Excluded packages are never upgraded,
+and neither are pinned packages (`brew pin`).
+
+`AUTO_UPGRADE`, `LOG_LEVEL` and `BACKUP_RETENTION_DAYS` are retired and ignored if present.
+Use `--yes` for unattended upgrades, `--verbose` for detailed logs, and `MAX_BACKUP_COUNT`
+for backup rotation.
+
 ### Environment Variables
 
 | Variable | Description | Default |
@@ -367,6 +387,8 @@ EXCLUDED_CASKS="docker-desktop virtualbox"
 | `BREW_UPDATE_MAX_RETRIES` | Maximum retry attempts | 3 |
 | `BREW_UPDATE_DEBUG` | Enable debug mode | false |
 | `ENABLE_NOTIFICATIONS` | Show macOS notifications (LaunchAgent) | false |
+| `NO_COLOR` | Disable colored output when set to any value | unset |
+| `BREW_UPDATE_TRIGGER` | Label recorded as `trigger` in the run summary (e.g. `app`) | `scheduled` under the LaunchAgent, otherwise `manual` |
 
 ```bash
 # Example usage with environment variables
