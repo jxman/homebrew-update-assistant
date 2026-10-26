@@ -121,14 +121,7 @@ final class AppModel {
         self.config = await config
         self.scriptVersion = await scriptVersion
         self.isLaunchAgentLoaded = await agentLoaded
-        switch await schedule {
-        case .success(let value):
-            self.schedule = value
-            self.scheduleError = nil
-        case .failure(let error):
-            self.schedule = nil
-            self.scheduleError = error.localizedDescription
-        }
+        applySchedule(await schedule)
         self.homebrewVersion = await homebrewVersion
         self.availableDiskSpace = status.availableDiskSpace(brewExecutable: brew.executable)
         await installedLoad
@@ -143,6 +136,30 @@ final class AppModel {
             installedError = nil
         } catch {
             installedError = error.localizedDescription
+        }
+    }
+
+    /// Re-reads the config file and LaunchAgent, e.g. when the Settings window opens, in
+    /// case they were edited by hand.
+    func reloadSettings() async {
+        let status = SystemStatus(paths: paths)
+        config = await status.config()
+        isLaunchAgentLoaded = await status.isLaunchAgentLoaded()
+        do {
+            applySchedule(.success(try await status.schedule()))
+        } catch {
+            applySchedule(.failure(error))
+        }
+    }
+
+    private func applySchedule(_ result: Result<Schedule, Error>) {
+        switch result {
+        case .success(let value):
+            schedule = value
+            scheduleError = nil
+        case .failure(let error):
+            schedule = nil
+            scheduleError = error.localizedDescription
         }
     }
 
@@ -241,6 +258,28 @@ extension AppModel {
         await changePackages {
             config = try await editor.setExcluded(excluded, for: packages)
         }
+    }
+
+    // MARK: Settings
+    // These throw instead of setting `actionError`, because the Settings window shows
+    // errors next to its Save button rather than in the main window.
+
+    func saveSchedule(_ draft: ScheduleDraft) async throws {
+        // Reloading the LaunchAgent stops a scheduled run that is in progress
+        guard runningPID == nil else { throw LaunchAgentError.runInProgress }
+        try await LaunchAgentService(paths: paths).save(draft, isLoaded: isLaunchAgentLoaded == true)
+        await reloadSettings()
+    }
+
+    func setScheduleEnabled(_ enabled: Bool) async throws {
+        guard runningPID == nil else { throw LaunchAgentError.runInProgress }
+        // Reload even on failure so the toggle shows launchd's real state
+        defer { Task { await reloadSettings() } }
+        try await LaunchAgentService(paths: paths).setEnabled(enabled)
+    }
+
+    func saveConfig(_ changes: [(key: String, value: String)]) async throws {
+        config = try await ConfigEditor(paths: paths).apply(changes)
     }
 
     private func changePackages(_ change: () async throws -> Void) async {

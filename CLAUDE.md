@@ -85,13 +85,14 @@ shellcheck brew-updates.command
 
 ## SwiftUI App (`app/`)
 
-- Native macOS app (menu bar + window), Swift 6, macOS 15+. Phases 1–2 done (viewing, plus run/dry run/upgrade selected with live output, pin and exclude); phase 3 is schedule and settings editing
+- Native macOS app (menu bar + window), Swift 6, macOS 15+. Phases 1–3 done (viewing; run/dry run/upgrade selected with live output, pin and exclude; Settings window for the schedule and config); phase 4 is polish (menu bar badge, backup diff/restore, notification opens app)
 - The Xcode project is **generated** by XcodeGen from `app/project.yml` and is gitignored. Run `cd app && xcodegen generate` after adding/removing files; never change settings in Xcode's project editor
 - Layout: `Models/` (pure parsing, no UI) → `Services/` (files, `brew`, `launchctl`) → `AppModel.swift` (`@Observable`, `@MainActor`) → `Views/`
 - The app must only ever invoke the **deployed** `~/bin/brew-updates.command`, read run data via `*.summary.json` (docs/run-summary-schema.md), and check `SystemStatus.minimumScriptVersion`
 - All `brew` calls set `HOMEBREW_NO_AUTO_UPDATE=1`, so the only state changes are explicit user actions (pin/unpin). Updates and upgrades always go through the script (`ScriptRunner`, with `--yes --no-color` and `BREW_UPDATE_TRIGGER=app`)
 - Stopping a run sends SIGINT to the script and its children (like Ctrl-C), so it still writes a `cancelled` summary and releases the lock
 - Exclusions are written to `~/.brew_update_config` by `ConfigEditor`, which only rewrites the `EXCLUDED_*` line and keeps comments. Names must match the script's regex or it drops the whole list
+- Schedule edits go through `LaunchAgentService`: rewrite the plist (backup `<plist>.app-backup`), then `launchctl bootout` + `bootstrap`. Never reload while the run lock is held, because bootout stops a scheduled run in progress. On/off uses `launchctl enable`/`disable` so it survives logins. Tests must never call launchctl against the real `com.user.brew-update` label
 - Tests (Swift Testing) compile `Models/` and `Services/` directly into an unhosted test bundle. Hosted tests hang because a menu bar app never quits
 - Build/test from the terminal with the default DerivedData (`~/Library/Developer`). A `-derivedDataPath` inside `~/Documents` makes `xctest` block on a Documents permission prompt:
   ```bash

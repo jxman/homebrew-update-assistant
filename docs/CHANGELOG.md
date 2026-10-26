@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Phase 2: pin/unpin formulae and add/remove exclusions in `~/.brew_update_config` from the
   Installed view (multi-select and right-click menu)
 - Quitting while an update is running asks first and stops the run cleanly
+- Phase 3: Settings window (⌘,). The Schedule tab turns scheduled runs on/off and sets
+  daily/weekly/monthly timing and run flags, rewriting the LaunchAgent plist (with a backup)
+  and reloading it. The Updates tab edits `~/.brew_update_config` (defaults, backup and log
+  retention, notifications, security scan, exclusions), rewriting only changed keys
 
 ## [2.2.1] - 2026-10-25
 

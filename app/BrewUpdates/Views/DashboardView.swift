@@ -3,6 +3,7 @@ import SwiftUI
 /// Overview: last run, next scheduled run, available updates, security and system info.
 struct DashboardView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openSettings) private var openSettings
 
     /// Cards flow into as many columns as fit, each at least 260pt wide
     private let columns = [GridItem(.adaptive(minimum: 260), spacing: 16)]
@@ -65,6 +66,8 @@ struct DashboardView: View {
                 Text(model.scheduleError ?? "Loading…")
                     .foregroundStyle(.secondary)
             }
+            Button("Edit schedule…") { openSettings() }
+                .buttonStyle(.link)
         }
     }
 

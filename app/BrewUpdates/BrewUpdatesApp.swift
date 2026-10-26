@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// App entry point. A SwiftUI app is a set of *scenes*: here, one main window and one
-/// menu bar item, both sharing the same `AppModel`.
+/// App entry point. A SwiftUI app is a set of *scenes*: here, one main window, the Settings
+/// window and a menu bar item, all sharing the same `AppModel`.
 @main
 struct BrewUpdatesApp: App {
     /// Connects an AppKit `NSApplicationDelegate` for the few things SwiftUI has no API for,
@@ -27,6 +27,12 @@ struct BrewUpdatesApp: App {
                 }
                 .keyboardShortcut("r")
             }
+        }
+
+        // `Settings` adds "Settings…" (⌘,) to the app menu and opens this in its own window
+        Settings {
+            SettingsView()
+                .environment(model)
         }
 
         MenuBarExtra {

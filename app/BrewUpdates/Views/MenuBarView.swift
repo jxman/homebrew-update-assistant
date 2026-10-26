@@ -29,6 +29,7 @@ struct MenuBarView: View {
     @Environment(AppModel.self) private var model
     // `openWindow` is an action SwiftUI provides through the environment
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         if let run = model.latestRun {
@@ -65,6 +66,12 @@ struct MenuBarView: View {
 
         Button("Open Brew Updates…") { showMainWindow() }
             .keyboardShortcut("o")
+        Button("Settings…") {
+            openSettings()
+            // A menu bar app isn't frontmost, so bring the new window forward
+            NSApp.activate()
+        }
+        .keyboardShortcut(",")
         Button("Refresh") {
             Task { await model.refresh() }
         }

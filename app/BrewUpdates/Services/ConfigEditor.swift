@@ -8,11 +8,24 @@ struct ConfigEditor: Sendable {
     /// Adds packages to (or removes them from) `EXCLUDED_FORMULAE` / `EXCLUDED_CASKS` and
     /// returns the config as it is now on disk.
     func setExcluded(_ excluded: Bool, for packages: [InstalledPackage]) async throws -> BrewConfig {
-        let text = try currentText()
-        let updated = try BrewConfig.settingExclusion(excluded, for: packages, in: text)
+        let updated = try BrewConfig.settingExclusion(excluded, for: packages, in: try currentText())
+        return try write(updated)
+    }
+
+    /// Sets each key (replacing its line, or appending one) and returns the config as it is
+    /// now on disk.
+    func apply(_ changes: [(key: String, value: String)]) async throws -> BrewConfig {
+        var text = try currentText()
+        for change in changes {
+            text = BrewConfig.setting(change.key, to: change.value, in: text)
+        }
+        return try write(text)
+    }
+
+    private func write(_ text: String) throws -> BrewConfig {
         // `.atomic` writes a temporary file and renames it, so the script never reads a half-written config
-        try Data(updated.utf8).write(to: paths.configFile, options: .atomic)
-        return BrewConfig.parse(updated)
+        try Data(text.utf8).write(to: paths.configFile, options: .atomic)
+        return BrewConfig.parse(text)
     }
 
     private func currentText() throws -> String {

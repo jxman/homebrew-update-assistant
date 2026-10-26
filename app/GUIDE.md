@@ -22,20 +22,21 @@ flowchart LR
     agent["LaunchAgent<br/>(3 AM)"] --> script["~/bin/brew-updates.command"]
     script --> logs["~/.brew_logs<br/>*.log, *.summary.json, *.security.json"]
     subgraph app["Brew Updates app"]
-        services["Services/<br/>RunStore, BrewService, SystemStatus,<br/>ScriptRunner, ConfigEditor"] --> model["AppModel + LiveRun<br/>(shared state)"]
-        model --> views["Views/<br/>Dashboard, Installed, Runs, Security, menu bar"]
-        views -- "Update, Dry Run, Upgrade,<br/>Pin, Exclude" --> model
+        services["Services/<br/>RunStore, BrewService, SystemStatus,<br/>ScriptRunner, ConfigEditor, LaunchAgentService"] --> model["AppModel + LiveRun<br/>(shared state)"]
+        model --> views["Views/<br/>Dashboard, Installed, Runs, Security,<br/>Settings, menu bar"]
+        views -- "Update, Dry Run, Upgrade,<br/>Pin, Exclude, Save settings" --> model
     end
     logs --> services
     brew["brew info / pin / unpin"] <--> services
     plist["LaunchAgent plist<br/>+ ~/.brew_update_config"] <--> services
+    services -- "launchctl bootout/bootstrap,<br/>enable/disable" --> agent
     services -- "runs with --yes --no-color<br/>(live output)" --> script
 ```
 
 The app never upgrades anything itself: **Update All**, **Dry Run** and **Upgrade** all run the
 same deployed script the LaunchAgent uses, so every run gets the same backup, logs, summary
-and run lock. The only direct changes are `brew pin`/`unpin` and the exclusion lists in
-`~/.brew_update_config`.
+and run lock. The only direct changes are `brew pin`/`unpin`, the settings in
+`~/.brew_update_config` (exclusions and the Settings window), and the LaunchAgent's schedule.
 
 | Folder | What lives there | Has UI code? |
 |--------|------------------|--------------|
@@ -291,6 +292,35 @@ SwiftUI has no hook for "the user chose Quit". `@NSApplicationDelegateAdaptor` i
 until the script has stopped. The delegate owns `AppModel`, so the scenes and the quit
 handling share one instance.
 
+### 19. The Settings scene and tabs
+
+`Settings { SettingsView() }` in `BrewUpdatesApp.swift` is a scene like `Window`, but macOS
+adds **Settings…** (⌘,) to the app menu for it. Inside, `TabView` with `Tab("Schedule",
+systemImage: …)` gives the icon tabs at the top, as in System Settings. Anywhere else,
+`@Environment(\.openSettings)` gives an action that opens the window (the menu bar's
+**Settings…** item and the dashboard's **Edit schedule…** link).
+
+### 20. Draft and original: editing with Save and Revert
+
+Each settings tab keeps two copies in `@State`: `original` (what's on disk) and `draft` (what
+the controls edit). Because the draft types (`ScheduleDraft`, `ConfigDraft`) are `Equatable`
+structs, "unsaved changes" is simply `draft != original`, Revert is `draft = original`, and
+Save writes the draft and reloads both. Value types make this easy: assigning a struct
+copies it, so editing the draft can never change the original by accident.
+
+`ConfigDraft.changes(from:)` compares the two and writes only the keys that changed, so lines
+you edited by hand in the config file are left alone.
+
+### 21. `@Binding`: editing a parent's state from a child view
+
+`ExclusionListEditor` (in `UpdateSettingsView.swift`) declares `@Binding var names`. The
+parent passes `$draft.excludedFormulae`, and the child adds and removes names directly in
+the parent's draft. `@State` *owns* data; `@Binding` *borrows* it.
+
+Custom bindings appear again here: the time `DatePicker` edits a `Date`, but the draft stores
+an hour and a minute, so `timeBinding` converts both ways. "Include casks" is a binding that
+inverts `skipCasksByDefault`.
+
 ## Trying the actions safely
 
 - **Dry Run** (toolbar Update menu ▾, or the menu bar) changes nothing and shows the live output.
@@ -299,6 +329,13 @@ handling share one instance.
   file to watch the `EXCLUDED_FORMULAE=` line change while your comments stay.
 - **Pin**/**Unpin** run `brew pin`/`brew unpin`; check with `brew list --pinned`.
 - **Update All…** and **Upgrade…** always ask first, and run exactly what the 3 AM job runs.
+- **Settings → Schedule**: change the time and press **Save**, then check with
+  `launchctl print gui/$(id -u)/com.user.brew-update | grep -A4 "event triggers"` or the
+  dashboard's Schedule card. The previous plist is kept as
+  `~/Library/LaunchAgents/com.user.brew-update.plist.app-backup`. Comments in the plist are
+  not preserved when the app rewrites it.
+- **Settings → Updates** edits `~/.brew_update_config`; only the settings you change are
+  rewritten.
 
 ## Things to try
 
@@ -328,6 +365,8 @@ Small, safe changes for practice. Use previews (⌥⌘↩) to see the result imm
 | macOS asks whether `xctest` or Xcode may access Documents | The repo is in `~/Documents`. Allow it for Xcode. Command-line builds use the default DerivedData in `~/Library` to avoid this |
 | Orange banner "Deployed script is v…" | Run `./scripts/setup.sh` from the repo root to deploy the current script |
 | Issue navigator shows "Update to recommended settings" | Usually after an Xcode upgrade. **Don't click Perform Changes** (the next `xcodegen generate` undoes it). Note the pre-checked settings, add them to `settings.base` in `project.yml`, set `options.xcodeVersion` to the new Xcode version, and regenerate |
+| Schedule Save says an update is running | Reloading the LaunchAgent would stop a scheduled run in progress. Wait for it to finish (Runs shows it as Running) |
+| Schedule toggle won't turn on | Check `launchctl print gui/$(id -u)/com.user.brew-update`. If the plist is missing, run `scripts/setup.sh` |
 | Update / Dry Run greyed out | A run is already in progress (scheduled or from Terminal), or the deployed script is older than the app needs (see the orange banner) |
 | Run ends at once with "Another update is already running" | Exit code 5: another run holds `~/.brew_logs/.brew-updates.lock`. Wait for it, or check the Runs list |
 | Preview shows an error or stops updating | ⌥⌘P to refresh; ⌘⇧K then ⌘B if it persists |
