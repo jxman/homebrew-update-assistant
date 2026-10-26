@@ -27,7 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the previous backup, and reinstalling missing taps, formulae and casks while holding the
   run lock
 - Phase 4: `brewupdates://` links (from notifications or `open`) jump to a run or section
-
+- Doctor screen: parses every run's `*.doctor.log` into issues with a plain-language
+  explanation, affected packages/taps, and suggested fixes (the app's own plus the commands
+  brew doctor prints, each with a Copy button). Tracks issues across runs (first seen, how
+  often, fixed recently), charts the issue count, and has **Check Now** (⇧⌘D) to run
+  `brew doctor` read-only and confirm a fix. Sidebar badge and dashboard card show open issues
 #### Fixed
 - Runs started from the app, and the app's own `brew` calls, used a shorter PATH than the
   LaunchAgent, so Brewfile backups from app runs left out VS Code extensions

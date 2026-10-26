@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Overview: last run, next scheduled run, available updates, security and system info.
+/// Overview: last run, next scheduled run, available updates, security, doctor and system info.
 struct DashboardView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openSettings) private var openSettings
@@ -16,6 +16,7 @@ struct DashboardView: View {
                     scheduleCard
                     updatesCard
                     securityCard
+                    doctorCard
                     systemCard
                 }
                 recentRuns
@@ -114,6 +115,38 @@ struct DashboardView: View {
             }
             Button("Show report") {
                 model.selectedSection = .security
+            }
+            .buttonStyle(.link)
+        }
+    }
+
+    private var doctorCard: some View {
+        Card(title: "Doctor", systemImage: "stethoscope") {
+            if let latest = model.doctor.latest {
+                let issues = model.doctorIssues.sorted { $0.importance < $1.importance }
+                if let worst = issues.first {
+                    Text("\(issues.count)")
+                        .font(.largeTitle.weight(.semibold))
+                        .foregroundStyle(worst.importance.color)
+                    Text(worst.headline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                } else {
+                    Label("Ready to brew", systemImage: "checkmark.seal.fill")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.green)
+                    Text("brew doctor found no issues")
+                        .foregroundStyle(.secondary)
+                }
+                Text("Checked \(latest.date.relativeDescription)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("No doctor reports yet")
+                    .foregroundStyle(.secondary)
+            }
+            Button("Review and fix") {
+                model.selectedSection = .doctor
             }
             .buttonStyle(.link)
         }

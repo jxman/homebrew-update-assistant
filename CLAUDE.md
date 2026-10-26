@@ -102,6 +102,7 @@ shellcheck brew-updates.command
   cd app && xcodebuild -project BrewUpdates.xcodeproj -scheme BrewUpdates -destination 'platform=macOS,arch=arm64' test
   ```
 - Lint: `swiftlint lint --strict` (config `app/.swiftlint.yml`), enforced by the pre-commit hook `hooks/swiftlint.sh`
+- Doctor screen: `DoctorReport` parses `*.doctor.log` text (`brew doctor --json` exists but is hidden from `--help`, so not relied on). `DoctorCheck` recognises warnings by headline fragments taken from Homebrew's `Library/Homebrew/diagnostic.rb`; add advice there plus a test when a new warning shows up. **Check Now** runs `brew doctor --verbose` (read-only) and keeps the result in memory only, never in `~/.brew_logs`. Fixes are copy-to-clipboard; the app does not run them
 - The user is learning SwiftUI and Xcode: explain new SwiftUI concepts briefly in code comments and keep `app/GUIDE.md` current
 
 ## Code Structure

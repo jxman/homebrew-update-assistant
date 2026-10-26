@@ -198,7 +198,9 @@ its 3 AM LaunchAgent stay the source of truth; the app reads their run summaries
 security reports, shows installed packages from Homebrew, and can start the deployed script
 itself (update, dry run, or selected packages) with live output. Its Settings window edits
 the LaunchAgent schedule and `~/.brew_update_config`, and its Backups screen compares
-Brewfile backups with what's installed and reinstalls anything missing.
+Brewfile backups with what's installed and reinstalls anything missing. Its Doctor screen
+explains each `brew doctor` warning in plain language, suggests fixes with copyable commands,
+and tracks when each issue first appeared and when it was fixed.
 
 | Phase | Scope | Status |
 |-------|-------|--------|

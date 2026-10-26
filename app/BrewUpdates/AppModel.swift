@@ -42,6 +42,8 @@ final class AppModel {
     private(set) var isChangingPackages = false
 
     let paths: AppPaths
+    /// brew doctor reports and their history
+    let doctor: DoctorModel
     private let brew = BrewService()
     private let watcher = DirectoryWatcher()
     private var runsReloadTask: Task<Void, Never>?
@@ -51,6 +53,7 @@ final class AppModel {
 
     init(paths: AppPaths = .current) {
         self.paths = paths
+        self.doctor = DoctorModel(paths: paths, brew: BrewService())
     }
 
     // MARK: Derived values (computed from the loaded data, so they never go stale)
@@ -67,6 +70,9 @@ final class AppModel {
         return status == .failed || status == .partial
     }
     var canStartRun: Bool { !isRunInProgress && !isScriptOutdated }
+
+    /// brew doctor's newest findings (sidebar badge and dashboard)
+    var doctorIssues: [DoctorIssue] { doctor.latest?.report.issues ?? [] }
     var nextScheduledRun: Date? { isLaunchAgentLoaded == false ? nil : schedule?.nextRun(after: .now) }
 
     var isScriptOutdated: Bool {
@@ -119,6 +125,7 @@ final class AppModel {
         async let installedLoad: Void = loadInstalled()
 
         apply(await snapshot)
+        await doctor.reload(runs: runs)
         self.config = await config
         self.scriptVersion = await scriptVersion
         self.isLaunchAgentLoaded = await agentLoaded
@@ -166,6 +173,7 @@ final class AppModel {
 
     func reloadRuns() async {
         apply(await RunStore(paths: paths).loadRuns())
+        await doctor.reload(runs: runs)
     }
 
     private func apply(_ snapshot: RunsSnapshot) {

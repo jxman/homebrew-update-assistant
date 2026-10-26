@@ -22,12 +22,12 @@ flowchart LR
     agent["LaunchAgent<br/>(3 AM)"] --> script["~/bin/brew-updates.command"]
     script --> logs["~/.brew_logs<br/>*.log, *.summary.json, *.security.json"]
     subgraph app["Brew Updates app"]
-        services["Services/<br/>RunStore, BrewService, SystemStatus,<br/>ScriptRunner, ConfigEditor,<br/>LaunchAgentService, BackupStore"] --> model["AppModel + LiveRun<br/>(shared state)"]
-        model --> views["Views/<br/>Dashboard, Installed, Runs, Security,<br/>Backups, Settings, menu bar"]
+        services["Services/<br/>RunStore, BrewService, SystemStatus,<br/>ScriptRunner, ConfigEditor,<br/>LaunchAgentService, BackupStore"] --> model["AppModel + LiveRun<br/>+ DoctorModel<br/>(shared state)"]
+        model --> views["Views/<br/>Dashboard, Installed, Runs, Security,<br/>Doctor, Backups, Settings, menu bar"]
         views -- "Update, Dry Run, Upgrade,<br/>Pin, Exclude, Restore,<br/>Save settings" --> model
     end
     logs --> services
-    brew["brew info / pin / unpin"] <--> services
+    brew["brew info / pin / unpin / doctor"] <--> services
     plist["LaunchAgent plist<br/>+ ~/.brew_update_config"] <--> services
     services -- "launchctl bootout/bootstrap,<br/>enable/disable" --> agent
     services -- "runs with --yes --no-color<br/>(live output)" --> script
@@ -44,6 +44,7 @@ and run lock. The only direct changes are `brew pin`/`unpin`, the settings in
 | `BrewUpdates/Services/` | Talking to the system: files, `brew`, `launchctl` | No |
 | `BrewUpdates/AppModel.swift` | The single shared state object the screens read, and the actions (run, stop, pin, exclude) | No (but drives the UI) |
 | `BrewUpdates/LiveRun.swift` | Output and state of a run started from the app | No |
+| `BrewUpdates/DoctorModel.swift` | brew doctor reports from all runs, plus Check Now | No |
 | `BrewUpdates/Views/` | SwiftUI screens and small components | Yes |
 | `BrewUpdatesTests/` | Unit tests for Models and Services | No |
 | `project.yml` | XcodeGen definition the Xcode project is generated from | — |
@@ -347,6 +348,23 @@ a new one.
 `NSWorkspace.shared.activateFileViewerSelecting` reveals a file in Finder. SwiftUI covers
 most of the UI; AppKit, the older macOS framework underneath, is still there for the rest.
 
+### 25. Grouped detail screens and the clipboard
+
+`DoctorIssueDetail` builds a readable detail pane from a few containers:
+
+- `GroupBox("Title") { ... }` draws a labelled, rounded box ("What this means", "Suggested fixes").
+- `DisclosureGroup("Homebrew's message", isExpanded: $showsMessage)` is a section the user
+  can expand. The `@State` bool remembers whether it's open.
+- `LazyVGrid` with `GridItem(.adaptive(minimum: 160))` wraps the affected package names onto
+  as many rows as fit, like the dashboard cards.
+- Copy buttons use `NSPasteboard` (AppKit's clipboard). The button briefly shows "Copied" by
+  setting `@State copied = true`, then a `Task` sleeps 1.5 s and sets it back.
+
+`DoctorModel` is a second `@Observable` object held by `AppModel` (`model.doctor`). Views read
+`model.doctor.snapshots` and SwiftUI tracks it like any other property. The Doctor chart uses
+`.interpolationMethod(.stepEnd)` so the issue count stays flat between reports instead of
+sloping.
+
 ## Trying the actions safely
 
 - **Dry Run** (toolbar Update menu ▾, or the menu bar) changes nothing and shows the live output.
@@ -365,6 +383,8 @@ most of the UI; AppKit, the older macOS framework underneath, is still there for
 - **Backups** only reads files until you press **Reinstall Missing…**, which asks first and
   runs `brew bundle install --no-upgrade` for just the missing taps, formulae and casks.
 - **Links**: with the app running, try `open "brewupdates://installed"` in Terminal.
+- **Doctor** only reads logs. **Check Now** (⇧⌘D) runs `brew doctor`, which changes nothing.
+  Suggested fixes are only copied to the clipboard; you run them yourself in Terminal.
 
 ## Things to try
 
@@ -383,7 +403,11 @@ Small, safe changes for practice. Use previews (⌥⌘↩) to see the result imm
 6. **Add a run option.** Add `case updateFormulaeOnly` to `ScriptAction` that passes
    `--skip-casks`, fill in the `switch` statements the compiler flags, and add it to the
    toolbar menu in `ContentView.RunControl`.
-7. **Colour the live output.** In `LogLineRow` (`LogView.swift`), give `.output` lines that
+7. **Teach Doctor a new warning.** Find a headline in
+   `/opt/homebrew/Library/Homebrew/diagnostic.rb`, add a `DoctorCheck` case with a fragment of
+   it, give it a summary in `DoctorAdvice.summaries`, and add the headline to
+   `DoctorReportTests.recognisesChecks`.
+8. **Colour the live output.** In `LogLineRow` (`LogView.swift`), give `.output` lines that
    start with `==>` (brew's headings) a bold font.
 
 ## Troubleshooting

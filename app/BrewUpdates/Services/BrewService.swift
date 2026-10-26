@@ -67,6 +67,14 @@ struct BrewService: Sendable {
         )
     }
 
+    /// Runs `brew doctor --verbose` (read-only). Doctor exits 1 whenever it finds anything, so
+    /// the exit code is ignored; its warnings go to stderr and the config sections to stdout.
+    func doctor() async throws -> DoctorReport {
+        guard let executable else { throw BrewServiceError.brewNotFound }
+        let result = try await ProcessRunner.run(executable, arguments: ["doctor", "--verbose"], environment: environment(for: executable))
+        return DoctorReport.parse(result.stdoutText + "\n" + result.stderrText)
+    }
+
     /// `brew pin` / `brew unpin`. Only formulae can be pinned.
     func setPinned(_ pinned: Bool, formulae names: [String]) async throws {
         _ = try await run([pinned ? "pin" : "unpin"] + names)

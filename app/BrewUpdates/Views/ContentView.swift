@@ -98,12 +98,17 @@ struct ContentView: View {
         case .installed: InstalledView()
         case .runs: RunsView()
         case .security: SecurityView()
+        case .doctor: DoctorView()
         case .backups: BackupsView()
         }
     }
 
     private func badgeCount(for section: AppModel.Section) -> Int {
-        section == .installed ? model.outdatedPackages.count : 0
+        switch section {
+        case .installed: model.outdatedPackages.count
+        case .doctor: model.doctorIssues.count { $0.importance != .informational }
+        default: 0
+        }
     }
 }
 
