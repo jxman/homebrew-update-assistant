@@ -14,7 +14,7 @@ set -o pipefail
 ###################
 # Configuration
 ###################
-readonly SCRIPT_VERSION="2.2.0"
+readonly SCRIPT_VERSION="2.2.1"
 # Version of the <run>.summary.json format consumed by the UI (see docs/run-summary-schema.md)
 readonly SUMMARY_SCHEMA_VERSION=1
 
@@ -1163,7 +1163,10 @@ HOMEBREW PACKAGE: \(.artifact.locations[0].path // "" | split("/") | .[4] // "Un
     # Count vulnerabilities found
     if [[ -f "$security_file" ]]; then
         # Count lines that match severity levels (excluding header and errors)
-        vuln_count=$(grep -E "(Critical|High|Medium)" "$security_file" 2>/dev/null | grep -v "^NAME" | grep -v "^error purl" | wc -l | xargs)
+        # awk (not grep | wc -l): grep exits 1 when a clean scan matches nothing, which pipefail
+        # + set -e would turn into a failed run
+        vuln_count=$(awk '/Critical|High|Medium/ && !/^NAME/ && !/^error purl/ { n++ } END { print n + 0 }' \
+            "$security_file" 2>/dev/null || echo 0)
         SECURITY_STATUS="completed"
         SECURITY_VULN_COUNT="$vuln_count"
 
@@ -1177,9 +1180,12 @@ HOMEBREW PACKAGE: \(.artifact.locations[0].path // "" | split("/") | .[4] // "Un
                 echo -e "  ${BLUE}Detailed report with file paths: $(create_clickable_link "$security_detailed")${NC}"
             fi
 
-            # Show and LOG top vulnerabilities (filter out grype errors)
+            # Show and LOG top vulnerabilities (filter out grype errors).
+            # awk reads all of its input: piping a large report into `head` makes the writer
+            # die of SIGPIPE, which pipefail + set -e turned into a failed run (exit 141).
             local top_vulns
-            top_vulns=$(grep -E "(Critical|High|Medium)" "$security_file" 2>/dev/null | grep -v "^NAME" | grep -v "^error purl" | head -10)
+            top_vulns=$(awk '/Critical|High|Medium/ && !/^NAME/ && !/^error purl/ && shown < 10 { print; shown++ }' \
+                "$security_file" 2>/dev/null || true)
 
             if [[ -n "$top_vulns" ]]; then
                 log_message "🔒 Top security vulnerabilities found:"
@@ -1197,7 +1203,8 @@ HOMEBREW PACKAGE: \(.artifact.locations[0].path // "" | split("/") | .[4] // "Un
             # Parse detailed report for actionable info if available
             if [[ -f "$security_detailed" ]]; then
                 local package_summary
-                package_summary=$(grep "^HOMEBREW PACKAGE:" "$security_detailed" 2>/dev/null | sort -u | head -5)
+                # `|| true`: grep finding nothing is not an error (same SIGPIPE reasoning as above for awk)
+                package_summary=$(grep "^HOMEBREW PACKAGE:" "$security_detailed" 2>/dev/null | sort -u | awk 'NR <= 5' || true)
                 if [[ -n "$package_summary" ]]; then
                     log_message "📦 Affected Homebrew packages:"
                     echo "$package_summary" | while IFS= read -r line; do

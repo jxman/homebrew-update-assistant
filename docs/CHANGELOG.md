@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Installed view (multi-select and right-click menu)
 - Quitting while an update is running asks first and stops the run cleanly
 
+## [2.2.1] - 2026-10-25
+
+### Fixed
+- Runs failed with exit code 141 after the security scan when it found many vulnerabilities:
+  piping the report into `head` killed the upstream `grep` with SIGPIPE, and `pipefail` +
+  `set -e` aborted the run before cleanup. Scheduled runs had been failing this way
+  (38 times in `launchagent.log`). The report is now filtered with `awk`, which reads all input
+- A security scan that found no vulnerabilities would have failed the run (exit 1), because
+  `grep` exits 1 on no match under `pipefail`. The count now uses `awk` as well
+
 ## [2.2.0] - 2026-10-25
 
 ### UI Groundwork (Phase 0)
