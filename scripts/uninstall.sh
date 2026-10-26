@@ -14,8 +14,10 @@ readonly BLUE='\033[0;34m'
 readonly NC='\033[0m' # No Color
 
 # Paths
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+readonly PROJECT_ROOT
 readonly DEST_SCRIPT="${HOME}/bin/brew-updates.command"
 readonly LAUNCHAGENT_PLIST="${HOME}/Library/LaunchAgents/com.user.brew-update.plist"
 readonly LOG_DIR="${HOME}/.brew_logs"
@@ -201,7 +203,8 @@ remove_launchagent() {
         print_dry_run "Would remove: $LAUNCHAGENT_PLIST"
     else
         # Create backup before removing
-        local backup_file="${LAUNCHAGENT_PLIST}.removed.$(date +%Y%m%d_%H%M%S)"
+        local backup_file
+        backup_file="${LAUNCHAGENT_PLIST}.removed.$(date +%Y%m%d_%H%M%S)"
         cp "$LAUNCHAGENT_PLIST" "$backup_file" 2>/dev/null || true
 
         if rm -f "$LAUNCHAGENT_PLIST"; then
@@ -226,7 +229,8 @@ remove_script() {
         print_dry_run "Would remove: $DEST_SCRIPT"
     else
         # Create backup before removing
-        local backup_file="${DEST_SCRIPT}.removed.$(date +%Y%m%d_%H%M%S)"
+        local backup_file
+        backup_file="${DEST_SCRIPT}.removed.$(date +%Y%m%d_%H%M%S)"
         cp "$DEST_SCRIPT" "$backup_file" 2>/dev/null || true
 
         if rm -f "$DEST_SCRIPT"; then
@@ -252,8 +256,10 @@ remove_logs() {
     fi
 
     # Count files
-    local log_count=$(find "$LOG_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')
-    local log_size=$(du -sh "$LOG_DIR" 2>/dev/null | cut -f1)
+    local log_count
+    log_count=$(find "$LOG_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')
+    local log_size
+    log_size=$(du -sh "$LOG_DIR" 2>/dev/null | cut -f1)
 
     if [[ "$DRY_RUN" == true ]]; then
         print_dry_run "Would remove $log_count log files ($log_size)"
@@ -281,8 +287,10 @@ remove_backups() {
     fi
 
     # Count files
-    local backup_count=$(find "$BACKUP_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')
-    local backup_size=$(du -sh "$BACKUP_DIR" 2>/dev/null | cut -f1)
+    local backup_count
+    backup_count=$(find "$BACKUP_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')
+    local backup_size
+    backup_size=$(du -sh "$BACKUP_DIR" 2>/dev/null | cut -f1)
 
     if [[ "$DRY_RUN" == true ]]; then
         print_dry_run "Would remove $backup_count backup files ($backup_size)"
@@ -313,7 +321,8 @@ remove_config() {
         print_dry_run "Would remove: $CONFIG_FILE"
     else
         # Create backup before removing
-        local backup_file="${CONFIG_FILE}.removed.$(date +%Y%m%d_%H%M%S)"
+        local backup_file
+        backup_file="${CONFIG_FILE}.removed.$(date +%Y%m%d_%H%M%S)"
         cp "$CONFIG_FILE" "$backup_file" 2>/dev/null || true
 
         if rm -f "$CONFIG_FILE"; then
