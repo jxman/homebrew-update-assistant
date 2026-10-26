@@ -26,8 +26,10 @@ struct InstalledPackage: Identifiable, Sendable, Hashable {
     let installedDate: Date?
     /// Casks that update themselves; `brew outdated` skips these by default
     let autoUpdates: Bool
-    /// Full names of the formulae this one needs at runtime (formulae only)
+    /// Full names of every formula this one needs at runtime, directly or not (formulae only)
     var runtimeDependencies: [String] = []
+    /// The subset of `runtimeDependencies` the formula declares itself
+    var directDependencies: [String] = []
     /// Apps the cask installs, from its current definition (see `CaskApp`)
     var appCandidates: [String] = []
     /// Filled in by `BrewService` after checking the disk
@@ -72,7 +74,8 @@ struct InstalledPackage: Identifiable, Sendable, Hashable {
                 installedOnRequest: installed?.installedOnRequest ?? true,
                 installedDate: installed?.time.map { Date(timeIntervalSince1970: TimeInterval($0)) },
                 autoUpdates: false,
-                runtimeDependencies: installed?.runtimeDependencies?.map(\.fullName) ?? []
+                runtimeDependencies: installed?.runtimeDependencies?.map(\.fullName) ?? [],
+                directDependencies: installed?.runtimeDependencies?.filter { $0.declaredDirectly == true }.map(\.fullName) ?? []
             )
         }
         let casks = info.casks.map { cask in
@@ -111,9 +114,12 @@ private struct BrewInfoDocument: Decodable {
 
         struct Dependency: Decodable {
             let fullName: String
+            /// False for dependencies of dependencies
+            let declaredDirectly: Bool?
 
             enum CodingKeys: String, CodingKey {
                 case fullName = "full_name"
+                case declaredDirectly = "declared_directly"
             }
         }
 

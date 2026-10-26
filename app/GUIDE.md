@@ -380,6 +380,18 @@ The Security chart fixes its axes instead of letting Charts fit them to the data
 with `AxisMarks(values: .stride(by: .day))` puts one labelled tick on each day, and
 `.chartYScale(domain: 0...max)` starts at zero so a drop looks as big as it really is.
 
+### 26. Passing actions down, and `.id()` for a fresh view
+
+The inspector's Dependencies section (`DependenciesSection.swift`) lists package names as
+links, but selecting a row is `InstalledView`'s job: the table's `selection` is its `@State`.
+So `InstalledView` passes a **closure** down, `select: (InstalledPackage) -> Void`, and each
+link calls `select(package)`. The child doesn't need to know how selecting works (here it
+also switches the filter to All if that package is hidden).
+
+`.id(selected.first?.id)` on the detail view tells SwiftUI that a different package means a
+different view. Without it SwiftUI reuses the same view and keeps its `@State`, so a list
+you expanded with **Show all** would stay expanded for the next package.
+
 ## Trying the actions safely
 
 - **Dry Run** (toolbar Update menu ▾, or the menu bar) changes nothing and shows the live output.
@@ -397,6 +409,8 @@ with `AxisMarks(values: .stride(by: .day))` puts one labelled tick on each day, 
   rewritten.
 - **Backups** only reads files until you press **Reinstall Missing…**, which asks first and
   runs `brew bundle install --no-upgrade` for just the missing taps, formulae and casks.
+- **Dependencies** (inspector, formulae only): what a package needs, what needs it, and for a
+  dependency which of your packages it was installed for. Click a name to jump to it. Read-only.
 - **Uninstall…** (right-click a package, the inspector, or the Delete key) always asks first.
   The dialog warns if another installed formula still needs the package; brew refuses to
   remove those anyway. Try it on something small you can reinstall, like `brew install cowsay`.

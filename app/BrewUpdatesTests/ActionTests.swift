@@ -185,6 +185,7 @@ struct UninstallPlanTests {
     @Test func readsRuntimeDependenciesFromBrewInfo() throws {
         let packages = try InstalledPackage.parseBrewInfo(Data(Fixtures.brewInfoJSON.utf8))
         #expect(packages.first { $0.name == "z3" }?.runtimeDependencies == ["abseil"])
+        #expect(packages.first { $0.name == "z3" }?.directDependencies == ["abseil"])
     }
 
     @Test func usesKindFlagAndFullNames() {

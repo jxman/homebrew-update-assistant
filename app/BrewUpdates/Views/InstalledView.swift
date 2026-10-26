@@ -74,8 +74,20 @@ struct InstalledView: View {
         if selected.count > 1 {
             MultiSelectionView(packages: selected)
         } else {
-            PackageDetailView(package: selected.first, config: model.config)
+            PackageDetailView(package: selected.first, installed: model.installed, config: model.config, select: select)
+                // A fresh view per package, so state like "Show all" doesn't carry over
+                .id(selected.first?.id)
         }
+    }
+
+    /// Selects a package clicked in the inspector, showing every package if the current
+    /// filter or search would hide it
+    private func select(_ package: InstalledPackage) {
+        if !rows.contains(where: { $0.id == package.id }) {
+            filter = .all
+            searchText = ""
+        }
+        selection = [package.id]
     }
 
     private var table: some View {
@@ -152,7 +164,9 @@ private struct StatusPills: View {
 /// Details for the selected package, shown in the inspector panel on the right.
 private struct PackageDetailView: View {
     let package: InstalledPackage?
+    let installed: [InstalledPackage]
     let config: BrewConfig
+    let select: (InstalledPackage) -> Void
 
     var body: some View {
         if let package {
@@ -181,6 +195,14 @@ private struct PackageDetailView: View {
                 }
                 Section("Actions") {
                     PackageActions(packages: [package])
+                }
+                // Casks have no runtime dependencies in brew's data
+                if package.kind == .formula {
+                    DependenciesSection(
+                        package: package,
+                        dependencies: PackageDependencies(of: package, in: installed),
+                        select: select
+                    )
                 }
                 Section("Source") {
                     LabeledContent("Type", value: package.kind.title)
