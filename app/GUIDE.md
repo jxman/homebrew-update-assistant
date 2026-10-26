@@ -47,6 +47,7 @@ and run lock. The only direct changes are `brew pin`/`unpin`, the settings in
 | `BrewUpdates/DoctorModel.swift` | brew doctor reports from all runs, plus Check Now | No |
 | `BrewUpdates/Views/` | SwiftUI screens and small components | Yes |
 | `BrewUpdatesTests/` | Unit tests for Models and Services | No |
+| `Icon/` | The app icon's SVG source and `make-icon.sh`, which renders it into the asset catalog | — |
 | `project.yml` | XcodeGen definition the Xcode project is generated from | — |
 
 Keeping parsing and file access out of the views is deliberate: that code is testable without
@@ -66,6 +67,14 @@ Re-run `xcodegen generate` whenever files are **added, removed or renamed**, or 
 
 > **Don't change build settings in Xcode's project editor.** The next `xcodegen generate`
 > overwrites them. Make setting changes in `project.yml` instead.
+
+### Installing a copy to use day to day
+
+`./scripts/install-app.sh` (from the repo root) builds a Release version, copies it to
+`/Applications/Brew Updates.app` and adds a Desktop alias. Run it again after changing the
+app; it asks you to quit the installed copy first. Keep using ⌘R in Xcode while developing,
+but don't leave both copies open: you'd get two menu bar icons, and notifications open
+whichever copy was launched last.
 
 ## Working in Xcode
 
@@ -432,5 +441,6 @@ Small, safe changes for practice. Use previews (⌥⌘↩) to see the result imm
 | Update / Dry Run greyed out | A run is already in progress (scheduled or from Terminal), or the deployed script is older than the app needs (see the orange banner) |
 | Run ends at once with "Another update is already running" | Exit code 5: another run holds `~/.brew_logs/.brew-updates.lock`. Wait for it, or check the Runs list |
 | Preview shows an error or stops updating | ⌥⌘P to refresh; ⌘⇧K then ⌘B if it persists |
+| Dock or Finder still shows the old (or generic) app icon | macOS caches icons. Quit the app, run `touch "$(ls -d ~/Library/Developer/Xcode/DerivedData/BrewUpdates-*/Build/Products/Debug/Brew\ Updates.app)"` and relaunch; if it persists, `killall Dock` |
 | Build fails after pulling changes | `xcodegen generate`, then ⌘⇧K and build again |
 | "Untrusted developer" / signing prompts | The app is ad-hoc signed for local use (`CODE_SIGN_IDENTITY: "-"` in `project.yml`); building it yourself avoids Gatekeeper prompts |

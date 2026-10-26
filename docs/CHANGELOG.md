@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before run summaries existed (counted from their `*.security.log` the same way the script does)
 - Security hides findings for formulae uninstalled since the scan (with a note naming them and
   a "Show them" link), and **Scan Now** (⇧⌘S) runs the script's grype scan on demand
+- `scripts/install-app.sh` builds the app (Release) into `/Applications` and adds a Desktop alias
+- App icon: a beer mug with an upgrade badge, drawn in `app/Icon/AppIcon.svg` and rendered
+  into `Assets.xcassets/AppIcon` by `app/Icon/make-icon.sh` (sips)
+
 #### Fixed
 - Runs started from the app, and the app's own `brew` calls, used a shorter PATH than the
   LaunchAgent, so Brewfile backups from app runs left out VS Code extensions

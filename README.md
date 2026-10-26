@@ -213,6 +213,9 @@ and tracks when each issue first appeared and when it was fixed.
 ```bash
 brew install xcodegen
 cd app && xcodegen generate && open BrewUpdates.xcodeproj   # then ⌘R
+
+# Or build a Release copy into /Applications with a Desktop alias (re-run after app changes)
+./scripts/install-app.sh
 ```
 
 See [app/GUIDE.md](app/GUIDE.md) for the Xcode workflow and a tour of the SwiftUI code.

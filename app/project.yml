@@ -47,6 +47,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jxman.BrewUpdates
         PRODUCT_NAME: Brew Updates
+        # Assets.xcassets/AppIcon, generated from Icon/AppIcon.svg by Icon/make-icon.sh
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Keep the Swift module name space-free for `@testable import BrewUpdates`
         PRODUCT_MODULE_NAME: BrewUpdates
         MARKETING_VERSION: 0.1.0
