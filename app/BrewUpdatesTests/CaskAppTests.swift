@@ -91,6 +91,39 @@ struct CaskAppTests {
         #expect(advice.fixes.compactMap(\.command) == ["brew reinstall --cask kiro-cli"])
     }
 
+    @Test func findsCasksHomebrewLeftOut() {
+        let folders = [".DS_Store", "grype", "orbstack", "tflint"]
+        #expect(UnreadableCask.tokens(inCaskroom: folders, loaded: ["grype", "orbstack"]) == ["tflint"])
+        #expect(UnreadableCask.tokens(inCaskroom: folders, loaded: ["grype", "orbstack", "tflint"]).isEmpty)
+    }
+
+    @Test func describesAnUnreadableCask() throws {
+        // Shapes from the real tflint receipt and `brew info --cask` output
+        let receipt = #"{"installed_on_request": true, "source": {"tap": "terraform-linters/tap", "version": "0.65.0"}}"#
+        var tflint = UnreadableCask.fromReceipt(token: "tflint", data: Data(receipt.utf8))
+        tflint.error = UnreadableCask.errorLine(in: """
+            Warning: something else
+            Error: Cask 'tflint' is unreadable: undefined local variable or method 'staged_path'
+            """)
+        #expect(tflint.tap == "terraform-linters/tap")
+        #expect(tflint.version == "0.65.0")
+        #expect(tflint.error == "Cask 'tflint' is unreadable: undefined local variable or method 'staged_path'")
+        #expect(tflint.tapRepository?.absoluteString == "https://github.com/terraform-linters/homebrew-tap")
+
+        let issue = try #require(DoctorIssue.unreadableCasks([tflint]))
+        #expect(issue.check == .unreadableCasks)
+        #expect(issue.items == ["tflint"])
+        #expect(issue.details.hasPrefix("tflint (0.65.0, from terraform-linters/tap): Cask 'tflint' is unreadable"))
+        #expect(issue.links == [URL(string: "https://github.com/terraform-linters/homebrew-tap")!])
+        let advice = DoctorAdvice(issue: issue, in: DoctorReport(issues: [issue]))
+        #expect(advice.fixes.compactMap(\.command) == ["brew info --cask tflint", "brew update"])
+
+        #expect(DoctorIssue.unreadableCasks([]) == nil)
+        // No receipt: still reported, just with less detail
+        #expect(UnreadableCask.fromReceipt(token: "x", data: nil).tapRepository == nil)
+        #expect(UnreadableCask(token: "y", tap: "homebrew/cask").tapRepository == nil)
+    }
+
     @Test func uninstallMessageMentionsThePassword() {
         var acrobat = cask("adobe-acrobat-reader", apps: [])
         acrobat.uninstallNeedsAdmin = true

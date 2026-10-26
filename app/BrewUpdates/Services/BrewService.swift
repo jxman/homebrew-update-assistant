@@ -52,6 +52,28 @@ struct BrewService: Sendable {
         return packages
     }
 
+    /// Installed casks that `installedPackages()` left out because Homebrew can't load them.
+    /// Compares the Caskroom with the loaded casks, so it only runs brew when something is missing.
+    func unreadableCasks(loaded: [InstalledPackage]) async -> [UnreadableCask] {
+        let caskroom = (executable?.deletingLastPathComponent().deletingLastPathComponent() ?? URL(filePath: "/opt/homebrew"))
+            .appending(path: "Caskroom")
+        let folders = (try? FileManager.default.contentsOfDirectory(atPath: caskroom.path)) ?? []
+        let loadedTokens = Set(loaded.filter { $0.kind == .cask }.map(\.name))
+        var result: [UnreadableCask] = []
+        for token in UnreadableCask.tokens(inCaskroom: folders, loaded: loadedTokens) {
+            let receipt = caskroom.appending(path: "\(token)/.metadata/INSTALL_RECEIPT.json")
+            var cask = UnreadableCask.fromReceipt(token: token, data: try? Data(contentsOf: receipt))
+            if let executable, let output = try? await ProcessRunner.run(
+                executable, arguments: ["info", "--cask", cask.tap.map { "\($0)/\(token)" } ?? token],
+                environment: environment(for: executable)
+            ) {
+                cask.error = UnreadableCask.errorLine(in: output.stderrText)
+            }
+            result.append(cask)
+        }
+        return result
+    }
+
     /// First line of `brew --version`, e.g. "Homebrew 7.0.10"
     func version() async throws -> String {
         let result = try await run(["--version"])

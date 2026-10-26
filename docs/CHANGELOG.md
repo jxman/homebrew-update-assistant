@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Installed inspector shows each formula's dependencies: what it needs, what needs it, and
   (for dependencies) which top-level packages it was installed for, with links to each. Flags
   dependencies nothing needs any more, using the same rule as `brew autoremove`
+- Doctor flags installed casks Homebrew can no longer read (e.g. a tap using a removed cask
+  DSL), which brew silently leaves out of `brew outdated` and the Installed view, with
+  Homebrew's error and a link to the tap for reporting it
 - Doctor flags casks whose app is missing (brew doctor doesn't check this), with
   **Clear Record** buttons that run `brew uninstall` for them
 - Uninstalls and restores that need the administrator password now ask with the macOS

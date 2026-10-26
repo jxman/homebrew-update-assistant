@@ -20,6 +20,8 @@ final class AppModel {
     private(set) var runningPID: Int32?
     private(set) var installed: [InstalledPackage] = []
     private(set) var installedError: String?
+    /// Installed casks Homebrew can't load, so `installed` leaves them out
+    private(set) var unreadableCasks: [UnreadableCask] = []
     private(set) var isLoadingInstalled = false
     private(set) var schedule: Schedule?
     private(set) var scheduleError: String?
@@ -78,7 +80,9 @@ final class AppModel {
     var canStartRun: Bool { !isRunInProgress && !isScriptOutdated }
 
     /// Problems the app finds itself, which brew doctor doesn't check
-    var appDoctorIssues: [DoctorIssue] { [DoctorIssue.missingCaskApps(in: installed)].compactMap { $0 } }
+    var appDoctorIssues: [DoctorIssue] {
+        [DoctorIssue.missingCaskApps(in: installed), DoctorIssue.unreadableCasks(unreadableCasks)].compactMap { $0 }
+    }
     /// brew doctor's newest findings plus the app's own (sidebar badge and dashboard)
     var doctorIssues: [DoctorIssue] { (doctor.latest?.report.issues ?? []) + appDoctorIssues }
     var nextScheduledRun: Date? { isLaunchAgentLoaded == false ? nil : schedule?.nextRun(after: .now) }
@@ -150,6 +154,7 @@ final class AppModel {
         do {
             installed = try await brew.installedPackages()
             installedError = nil
+            unreadableCasks = await brew.unreadableCasks(loaded: installed)
         } catch {
             installedError = error.localizedDescription
         }
