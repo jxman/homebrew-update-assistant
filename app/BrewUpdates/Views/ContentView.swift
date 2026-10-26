@@ -40,6 +40,12 @@ struct ContentView: View {
         }
         // `.task` runs async work when the view appears and cancels it if the view goes away
         .task { await model.start() }
+        // `brewupdates://` links, e.g. from clicking one of the script's notifications
+        .onOpenURL { url in
+            if let link = AppLink(url: url) {
+                model.open(link)
+            }
+        }
         // `presenting:` hands the pending action to the dialog's buttons and message. Setting
         // `isPresented` to false (any button does this) clears it again.
         .confirmationDialog(
@@ -92,6 +98,7 @@ struct ContentView: View {
         case .installed: InstalledView()
         case .runs: RunsView()
         case .security: SecurityView()
+        case .backups: BackupsView()
         }
     }
 

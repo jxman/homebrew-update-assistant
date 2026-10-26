@@ -21,6 +21,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   daily/weekly/monthly timing and run flags, rewriting the LaunchAgent plist (with a backup)
   and reloading it. The Updates tab edits `~/.brew_update_config` (defaults, backup and log
   retention, notifications, security scan, exclusions), rewriting only changed keys
+- Phase 4: the menu bar icon warns when the last run failed, the Dock icon shows the update
+  count, and the count refreshes after scheduled runs and hourly
+- Phase 4: Backups screen comparing each Brewfile backup with what's installed now or with
+  the previous backup, and reinstalling missing taps, formulae and casks while holding the
+  run lock
+- Phase 4: `brewupdates://` links (from notifications or `open`) jump to a run or section
+
+#### Fixed
+- Runs started from the app, and the app's own `brew` calls, used a shorter PATH than the
+  LaunchAgent, so Brewfile backups from app runs left out VS Code extensions
+
+## [2.3.0] - 2026-10-25
+
+### Added
+- Clicking a notification opens that run in the Brew Updates app (`brewupdates://run/<RUN_ID>`)
+  when the app has recorded its location in `~/.brew_logs/.brew-updates-app`; otherwise it
+  still opens the log folder
 
 ## [2.2.1] - 2026-10-25
 

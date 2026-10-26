@@ -1,15 +1,25 @@
 import SwiftUI
 
 /// The icon in the menu bar: a mug, plus the number of outdated packages when there are any.
+/// It turns into arrows while a run is going and a warning triangle when the last run failed.
 struct MenuBarLabel: View {
     let model: AppModel
+
+    private var icon: String {
+        if model.isRunInProgress {
+            "arrow.triangle.2.circlepath"
+        } else if model.latestRunNeedsAttention {
+            "exclamationmark.triangle"
+        } else {
+            "mug"
+        }
+    }
 
     var body: some View {
         // `Group` lets one modifier (.task) apply to whichever branch of the `if` is shown.
         // Each branch picks its own label style; SwiftUI applies styles while laying out the view.
         Group {
             let count = model.outdatedPackages.count
-            let icon = model.isRunInProgress ? "arrow.triangle.2.circlepath" : "mug"
             if count > 0 {
                 Label("\(count)", systemImage: icon)
                     .labelStyle(.titleAndIcon)
@@ -20,6 +30,10 @@ struct MenuBarLabel: View {
         }
         // Load data even if the main window was closed at launch
         .task { await model.start() }
+        // The Dock icon shows the same count. `initial: true` also runs this on first appearance.
+        .onChange(of: model.outdatedPackages.count, initial: true) { _, count in
+            NSApp.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
+        }
     }
 }
 
@@ -34,6 +48,12 @@ struct MenuBarView: View {
     var body: some View {
         if let run = model.latestRun {
             Text("Last run: \(run.status.title), \(run.date.relativeDescription)")
+        }
+        if model.latestRunNeedsAttention, let run = model.latestSummarizedRun {
+            Button("Show What Went Wrong…") {
+                model.open(.run(run.id))
+                showMainWindow()
+            }
         }
         if model.isRunInProgress {
             Text("Update running now…")

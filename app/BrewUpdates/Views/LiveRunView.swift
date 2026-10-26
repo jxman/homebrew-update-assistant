@@ -19,11 +19,11 @@ struct LiveRunView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 12) {
-            Image(systemName: run.action.systemImage)
+            Image(systemName: run.systemImage)
                 .font(.title)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 4) {
-                Text(run.action.title).font(.title2.weight(.semibold))
+                Text(run.title).font(.title2.weight(.semibold))
                 stateLabel
             }
             Spacer()

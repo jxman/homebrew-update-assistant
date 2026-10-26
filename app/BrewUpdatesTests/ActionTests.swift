@@ -97,15 +97,15 @@ struct ConfigEditingTests {
 /// Runs a stand-in for the deployed script from a temporary home directory.
 @Suite("Script runner")
 struct ScriptRunnerTests {
-    private func launch(script: String, in home: TemporaryHome, action: ScriptAction = .dryRun) async throws -> LaunchedScript {
+    private func launch(script: String, in home: TemporaryHome, action: ScriptAction = .dryRun) async throws -> LaunchedProcess {
         let paths = AppPaths(home: home.url)
         try FileManager.default.createDirectory(at: paths.deployedScript.deletingLastPathComponent(), withIntermediateDirectories: true)
         try script.write(to: paths.deployedScript, atomically: true, encoding: .utf8)
         return try await ScriptRunner(paths: paths, brewExecutable: nil).launch(action)
     }
 
-    private func collect(_ events: AsyncStream<ScriptEvent>) async -> [ScriptEvent] {
-        var collected: [ScriptEvent] = []
+    private func collect(_ events: AsyncStream<ProcessEvent>) async -> [ProcessEvent] {
+        var collected: [ProcessEvent] = []
         for await event in events {
             collected.append(event)
         }
@@ -148,7 +148,7 @@ struct ScriptRunnerTests {
 
         let clock = ContinuousClock()
         let start = clock.now
-        ScriptRunner.interrupt(pid: launched.pid)
+        ProcessStream.interrupt(pid: launched.pid)
         #expect(await iterator.next() == .exited(130))
         #expect(clock.now - start < .seconds(5))
         // Keeps the directory until the script has exited

@@ -14,13 +14,15 @@ set -o pipefail
 ###################
 # Configuration
 ###################
-readonly SCRIPT_VERSION="2.2.1"
+readonly SCRIPT_VERSION="2.3.0"
 # Version of the <run>.summary.json format consumed by the UI (see docs/run-summary-schema.md)
 readonly SUMMARY_SCHEMA_VERSION=1
 
 readonly BACKUP_DIR="${HOME}/.brew_backups"
 readonly LOG_DIR="${HOME}/.brew_logs"
 readonly LOCK_DIR="${LOG_DIR}/.brew-updates.lock"
+# Written by the Brew Updates app with its location; when present, notifications open the app
+readonly APP_MARKER="${LOG_DIR}/.brew-updates-app"
 readonly LAUNCHAGENT_LABEL="com.user.brew-update"
 
 # One timestamp per run so every file it produces shares the same run ID
@@ -195,10 +197,20 @@ send_notification() {
 
     log_verbose "Sending notification: $title - $message"
 
-    # Try terminal-notifier first (supports click actions to open log folder)
+    # Clicking opens this run in the Brew Updates app when it's installed, else the log folder
+    local -a click_action=(-execute "open '${LOG_DIR}'")
+    local app_path=""
+    if [[ -f "$APP_MARKER" ]]; then
+        IFS= read -r app_path < "$APP_MARKER" || true
+    fi
+    if [[ -n "$app_path" && -d "$app_path" ]]; then
+        click_action=(-open "brewupdates://run/${RUN_ID}")
+    fi
+
+    # Try terminal-notifier first (supports click actions)
     # Use full path to ensure it works in LaunchAgent environment
     if /opt/homebrew/bin/terminal-notifier -title "$title" -message "$message" -sound "$sound" \
-        -execute "open '${LOG_DIR}'" 2>/dev/null; then
+        "${click_action[@]}" 2>/dev/null; then
         log_verbose "Notification sent successfully via terminal-notifier (clickable)"
         return 0
     fi

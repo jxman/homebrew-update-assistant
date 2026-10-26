@@ -197,7 +197,8 @@ A native macOS menu bar + window app in [`app/`](app/) sits on top of the script
 its 3 AM LaunchAgent stay the source of truth; the app reads their run summaries, logs and
 security reports, shows installed packages from Homebrew, and can start the deployed script
 itself (update, dry run, or selected packages) with live output. Its Settings window edits
-the LaunchAgent schedule and `~/.brew_update_config`.
+the LaunchAgent schedule and `~/.brew_update_config`, and its Backups screen compares
+Brewfile backups with what's installed and reinstalls anything missing.
 
 | Phase | Scope | Status |
 |-------|-------|--------|
@@ -205,7 +206,7 @@ the LaunchAgent schedule and `~/.brew_update_config`.
 | 1 | Read-only app: Dashboard, Installed, Runs & logs, Security, menu bar | ✅ Done |
 | 2 | Actions: run now / dry run with live output, upgrade selected, pin & exclude | ✅ Done |
 | 3 | Settings window: edit the schedule (on/off, time, days, flags) and config file settings | ✅ Done |
-| 4 | Backup diff/restore, notification → app | Planned |
+| 4 | Menu bar/Dock status, backup compare and restore, notifications open the app | ✅ Done |
 
 ```bash
 brew install xcodegen

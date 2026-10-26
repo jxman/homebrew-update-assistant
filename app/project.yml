@@ -33,6 +33,16 @@ targets:
     platform: macOS
     sources:
       - path: BrewUpdates
+    # Extra Info.plist keys, merged with the generated ones. XcodeGen writes this file on
+    # `xcodegen generate` (it's gitignored).
+    info:
+      path: BrewUpdates/Info.plist
+      properties:
+        # Registers brewupdates:// links (used by the script's notifications)
+        CFBundleURLTypes:
+          - CFBundleURLName: com.jxman.BrewUpdates
+            CFBundleURLSchemes:
+              - brewupdates
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jxman.BrewUpdates

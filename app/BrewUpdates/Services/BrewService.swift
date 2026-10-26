@@ -8,7 +8,7 @@ enum BrewServiceError: LocalizedError {
     }
 }
 
-/// Homebrew queries, plus pin/unpin.
+/// Homebrew queries, plus pin/unpin and Brewfile restores.
 ///
 /// Every command runs with `HOMEBREW_NO_AUTO_UPDATE=1` so that brew never updates itself as
 /// a side effect; updating and upgrading are left to the script.
@@ -23,6 +23,15 @@ struct BrewService: Sendable {
 
     init(executable: URL? = BrewService.locate()) {
         self.executable = executable
+    }
+
+    /// The search path the LaunchAgent gives the script (see scripts/setup.sh). Using it
+    /// everywhere means brew finds the same tools whether a run starts at 3 AM or from the
+    /// app: `brew bundle dump` only lists VS Code extensions when it finds `code`, which lives
+    /// in /usr/local/bin. A shorter PATH made backups from the app silently incomplete.
+    static func searchPath(brewExecutable: URL?) -> String {
+        let prefix = brewExecutable?.deletingLastPathComponent().deletingLastPathComponent().path ?? "/opt/homebrew"
+        return "\(prefix)/bin:\(prefix)/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
     }
 
     static func locate() -> URL? {
@@ -42,6 +51,22 @@ struct BrewService: Sendable {
         return result.stdoutText.split(separator: "\n").first.map(String.init) ?? ""
     }
 
+    /// What is installed now, in Brewfile form (`brew bundle dump` to stdout)
+    func currentBrewfile() async throws -> [BrewfileEntry] {
+        Brewfile.parse(try await run(["bundle", "dump", "--file=-"]).stdoutText)
+    }
+
+    /// `brew bundle install` with live output. `--no-upgrade` only installs what is missing;
+    /// anything already installed is left at its current version.
+    func launchBundleInstall(brewfile: URL) async throws -> LaunchedProcess {
+        guard let executable else { throw BrewServiceError.brewNotFound }
+        return try await ProcessStream.launch(
+            executable,
+            arguments: ["bundle", "install", "--file=\(brewfile.path)", "--no-upgrade"],
+            environment: environment(for: executable)
+        )
+    }
+
     /// `brew pin` / `brew unpin`. Only formulae can be pinned.
     func setPinned(_ pinned: Bool, formulae names: [String]) async throws {
         _ = try await run([pinned ? "pin" : "unpin"] + names)
@@ -54,9 +79,8 @@ struct BrewService: Sendable {
 
     private func environment(for executable: URL) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
-        // Apps launched from Finder get a minimal PATH; brew needs its own bin directory
-        let brewBin = executable.deletingLastPathComponent().path
-        env["PATH"] = "\(brewBin):/usr/bin:/bin:/usr/sbin:/sbin"
+        // Apps launched from Finder get a minimal PATH
+        env["PATH"] = Self.searchPath(brewExecutable: executable)
         env["HOMEBREW_NO_AUTO_UPDATE"] = "1"
         env["HOMEBREW_NO_ENV_HINTS"] = "1"
         env["HOMEBREW_NO_COLOR"] = "1"

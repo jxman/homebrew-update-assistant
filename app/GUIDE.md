@@ -22,9 +22,9 @@ flowchart LR
     agent["LaunchAgent<br/>(3 AM)"] --> script["~/bin/brew-updates.command"]
     script --> logs["~/.brew_logs<br/>*.log, *.summary.json, *.security.json"]
     subgraph app["Brew Updates app"]
-        services["Services/<br/>RunStore, BrewService, SystemStatus,<br/>ScriptRunner, ConfigEditor, LaunchAgentService"] --> model["AppModel + LiveRun<br/>(shared state)"]
-        model --> views["Views/<br/>Dashboard, Installed, Runs, Security,<br/>Settings, menu bar"]
-        views -- "Update, Dry Run, Upgrade,<br/>Pin, Exclude, Save settings" --> model
+        services["Services/<br/>RunStore, BrewService, SystemStatus,<br/>ScriptRunner, ConfigEditor,<br/>LaunchAgentService, BackupStore"] --> model["AppModel + LiveRun<br/>(shared state)"]
+        model --> views["Views/<br/>Dashboard, Installed, Runs, Security,<br/>Backups, Settings, menu bar"]
+        views -- "Update, Dry Run, Upgrade,<br/>Pin, Exclude, Restore,<br/>Save settings" --> model
     end
     logs --> services
     brew["brew info / pin / unpin"] <--> services
@@ -321,6 +321,32 @@ Custom bindings appear again here: the time `DatePicker` edits a `Date`, but the
 an hour and a minute, so `timeBinding` converts both ways. "Include casks" is a binding that
 inverts `skipCasksByDefault`.
 
+### 22. Links into the app: URL schemes and `.onOpenURL`
+
+The app registers the `brewupdates://` scheme in its Info.plist (the `info:` block in
+`project.yml`). When something opens such a link (`open "brewupdates://installed"` in
+Terminal, or clicking one of the script's notifications), macOS hands it to the app and
+`.onOpenURL` in `ContentView` receives it. `AppLink` turns the URL into a value (and rejects
+anything malformed), and `AppModel.open(_:)` switches to the right screen. Parsing outside
+the view keeps it testable (`AppLinkTests`).
+
+The script learns where the app is from `~/.brew_logs/.brew-updates-app`, which the app
+writes at launch. Only then do its notifications use `brewupdates://run/<RUN_ID>`; otherwise
+clicking still opens the log folder.
+
+### 23. `.task(id:)` with several inputs
+
+`BackupsView` must recompare whenever the selected backup, the comparison mode, or the
+"installed now" list changes. `.task(id:)` takes one `Hashable` value, so `DiffKey` bundles
+all three into a small struct. Change any of them and SwiftUI cancels the old task and starts
+a new one.
+
+### 24. Small AppKit touches
+
+`NSApp.dockTile.badgeLabel` puts the update count on the Dock icon (`MenuBarLabel`), and
+`NSWorkspace.shared.activateFileViewerSelecting` reveals a file in Finder. SwiftUI covers
+most of the UI; AppKit, the older macOS framework underneath, is still there for the rest.
+
 ## Trying the actions safely
 
 - **Dry Run** (toolbar Update menu ▾, or the menu bar) changes nothing and shows the live output.
@@ -336,6 +362,9 @@ inverts `skipCasksByDefault`.
   not preserved when the app rewrites it.
 - **Settings → Updates** edits `~/.brew_update_config`; only the settings you change are
   rewritten.
+- **Backups** only reads files until you press **Reinstall Missing…**, which asks first and
+  runs `brew bundle install --no-upgrade` for just the missing taps, formulae and casks.
+- **Links**: with the app running, try `open "brewupdates://installed"` in Terminal.
 
 ## Things to try
 
@@ -367,6 +396,8 @@ Small, safe changes for practice. Use previews (⌥⌘↩) to see the result imm
 | Issue navigator shows "Update to recommended settings" | Usually after an Xcode upgrade. **Don't click Perform Changes** (the next `xcodegen generate` undoes it). Note the pre-checked settings, add them to `settings.base` in `project.yml`, set `options.xcodeVersion` to the new Xcode version, and regenerate |
 | Schedule Save says an update is running | Reloading the LaunchAgent would stop a scheduled run in progress. Wait for it to finish (Runs shows it as Running) |
 | Schedule toggle won't turn on | Check `launchctl print gui/$(id -u)/com.user.brew-update`. If the plist is missing, run `scripts/setup.sh` |
+| Clicking a notification opens the log folder, not the app | Launch the app once so it records its location in `~/.brew_logs/.brew-updates-app`, and make sure the deployed script is v2.3.0+ (`scripts/setup.sh`) |
+| A backup shows many `vscode` entries as added/missing | Backups made by app runs before phase 4 lacked VS Code extensions (the app's PATH didn't include `/usr/local/bin`). They age out after `MAX_BACKUP_COUNT` runs |
 | Update / Dry Run greyed out | A run is already in progress (scheduled or from Terminal), or the deployed script is older than the app needs (see the orange banner) |
 | Run ends at once with "Another update is already running" | Exit code 5: another run holds `~/.brew_logs/.brew-updates.lock`. Wait for it, or check the Runs list |
 | Preview shows an error or stops updating | ⌥⌘P to refresh; ⌘⇧K then ⌘B if it persists |

@@ -9,27 +9,6 @@ import Observation
 @MainActor
 @Observable
 final class AppModel {
-    enum Section: String, CaseIterable, Identifiable {
-        case dashboard
-        case installed
-        case runs
-        case security
-
-        var id: String { rawValue }
-
-        var title: String { rawValue.capitalized }
-
-        /// SF Symbols name for the sidebar icon
-        var systemImage: String {
-            switch self {
-            case .dashboard: "gauge.with.dots.needle.33percent"
-            case .installed: "shippingbox"
-            case .runs: "clock.arrow.circlepath"
-            case .security: "lock.shield"
-            }
-        }
-    }
-
     // MARK: Navigation
 
     var selectedSection: Section? = .dashboard
@@ -67,6 +46,7 @@ final class AppModel {
     private let watcher = DirectoryWatcher()
     private var runsReloadTask: Task<Void, Never>?
     private var liveRunTask: Task<Void, Never>?
+    private var periodicRefreshTask: Task<Void, Never>?
     private var hasStarted = false
 
     init(paths: AppPaths = .current) {
@@ -80,6 +60,12 @@ final class AppModel {
     var outdatedPackages: [InstalledPackage] { installed.filter(\.isOutdated) }
     /// A run holds the script's lock (scheduled or from the app), or the app is starting one
     var isRunInProgress: Bool { runningPID != nil || liveRun?.isActive == true }
+
+    /// The last finished run failed or only partly worked (menu bar warning)
+    var latestRunNeedsAttention: Bool {
+        guard let status = latestSummarizedRun?.status else { return false }
+        return status == .failed || status == .partial
+    }
     var canStartRun: Bool { !isRunInProgress && !isScriptOutdated }
     var nextScheduledRun: Date? { isLaunchAgentLoaded == false ? nil : schedule?.nextRun(after: .now) }
 
@@ -101,7 +87,22 @@ final class AppModel {
         watcher.start(watching: paths.logDirectory) { [weak self] in
             self?.scheduleRunsReload()
         }
+        registerAppLocation()
+        // Outdated counts change when taps update, so re-check hourly; reading installed
+        // packages is local and quick
+        periodicRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60 * 60))
+                await self?.loadInstalled()
+            }
+        }
         await refresh()
+    }
+
+    /// Lets the script's notifications link to this app (see `AppPaths.appMarker`).
+    private func registerAppLocation() {
+        try? FileManager.default.createDirectory(at: paths.logDirectory, withIntermediateDirectories: true)
+        try? Data((Bundle.main.bundlePath + "\n").utf8).write(to: paths.appMarker, options: .atomic)
     }
 
     /// Reloads all data. The independent loads run in parallel with `async let`.
@@ -182,7 +183,12 @@ final class AppModel {
         runsReloadTask = Task {
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
+            let previousFinished = latestSummarizedRun?.id
             await reloadRuns()
+            // A run finished (e.g. the scheduled one): packages have probably changed
+            if latestSummarizedRun?.id != previousFinished {
+                await loadInstalled()
+            }
         }
     }
 }
@@ -201,15 +207,30 @@ extension AppModel {
 
     /// Runs the deployed script and collects its output into `liveRun`.
     func start(_ action: ScriptAction) {
+        let runner = ScriptRunner(paths: paths, brewExecutable: brew.executable)
+        runLive(title: action.title, systemImage: action.systemImage, writesRunFiles: true) {
+            try await runner.launch(action)
+        }
+    }
+
+    /// Starts a command, shows its output as the live run, and refreshes everything after.
+    /// `writesRunFiles`: the script leaves files in ~/.brew_logs to link the live run to.
+    /// `finally` runs once the command has exited (or failed to start).
+    private func runLive(
+        title: String,
+        systemImage: String,
+        writesRunFiles: Bool,
+        finally: (@MainActor () -> Void)? = nil,
+        launch: @escaping @Sendable () async throws -> LaunchedProcess
+    ) {
         guard canStartRun else { return }
-        let run = LiveRun(action: action)
+        let run = LiveRun(title: title, systemImage: systemImage)
         liveRun = run
         selectedSection = .runs
-        let runner = ScriptRunner(paths: paths, brewExecutable: brew.executable)
 
         liveRunTask = Task {
             do {
-                let launched = try await runner.launch(action)
+                let launched = try await launch()
                 run.state = .running(pid: launched.pid)
                 // `for await` receives each event as the script produces it, and ends when the
                 // stream finishes after the exit code
@@ -224,16 +245,68 @@ extension AppModel {
             } catch {
                 run.state = .failedToStart(error.localizedDescription)
             }
+            finally?()
             // Packages and runs have changed; reload them and find this run's files
             await refresh()
-            run.runID = runs.first { $0.date >= run.startedAt.addingTimeInterval(-2) }?.id
+            if writesRunFiles {
+                run.runID = runs.first { $0.date >= run.startedAt.addingTimeInterval(-2) }?.id
+            }
+        }
+    }
+
+    /// Reinstalls backup entries that are missing now (`brew bundle install --no-upgrade`).
+    /// Only taps, formulae and casks; nothing is uninstalled or downgraded. Holds the script's
+    /// run lock so a scheduled run can't start partway through.
+    func restore(_ entries: [BrewfileEntry], from backup: Backup) {
+        let restorable = entries.filter(\.isRestorable)
+        guard !restorable.isEmpty, canStartRun else { return }
+
+        let lock = RunLock(paths: paths)
+        let brewfile = FileManager.default.temporaryDirectory.appending(path: "BrewUpdates-restore-\(backup.id).Brewfile")
+        do {
+            try lock.acquire()
+            try Brewfile.text(for: restorable).write(to: brewfile, atomically: true, encoding: .utf8)
+        } catch {
+            lock.release()
+            actionError = error.localizedDescription
+            return
+        }
+
+        let brew = brew
+        runLive(
+            title: "Restore from \(backup.date.formatted(date: .abbreviated, time: .shortened)) Backup",
+            systemImage: "arrow.uturn.backward.circle",
+            writesRunFiles: false,
+            finally: {
+                lock.release()
+                try? FileManager.default.removeItem(at: brewfile)
+            },
+            launch: { try await brew.launchBundleInstall(brewfile: brewfile) }
+        )
+    }
+
+    /// What is installed now in Brewfile form, for comparing with backups
+    func currentBrewfile() async throws -> [BrewfileEntry] {
+        try await brew.currentBrewfile()
+    }
+
+    /// Shows what a `brewupdates://` link points at.
+    func open(_ link: AppLink) {
+        switch link {
+        case .run(let id):
+            selectedRunID = id
+            selectedSection = .runs
+        case .section(let name):
+            if let section = Section(rawValue: name) {
+                selectedSection = section
+            }
         }
     }
 
     func stopLiveRun() {
         guard let run = liveRun, case .running(let pid) = run.state else { return }
         run.state = .stopping
-        ScriptRunner.interrupt(pid: pid)
+        ProcessStream.interrupt(pid: pid)
     }
 
     /// Waits until the live run has exited, or the timeout passes.

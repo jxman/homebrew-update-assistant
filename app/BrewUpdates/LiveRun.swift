@@ -1,7 +1,8 @@
 import Foundation
 import Observation
 
-/// A script run started from the app, with its output so far.
+/// A long-running command started from the app (a script run or a Brewfile restore), with
+/// its output so far.
 ///
 /// A separate `@Observable` object (rather than more properties on `AppModel`) so that only
 /// the views showing the output re-render as new lines arrive.
@@ -17,7 +18,8 @@ final class LiveRun: Identifiable {
     }
 
     let id = UUID()
-    let action: ScriptAction
+    let title: String
+    let systemImage: String
     let startedAt = Date.now
     /// Set by `AppModel` as the run progresses
     var state: State = .starting
@@ -25,8 +27,9 @@ final class LiveRun: Identifiable {
     /// The run's files in ~/.brew_logs, found once it has finished
     var runID: Run.ID?
 
-    init(action: ScriptAction) {
-        self.action = action
+    init(title: String, systemImage: String) {
+        self.title = title
+        self.systemImage = systemImage
     }
 
     var isActive: Bool {

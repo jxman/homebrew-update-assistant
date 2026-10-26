@@ -97,10 +97,10 @@ private struct LiveRunRow: View {
             if run.isActive {
                 ProgressView().controlSize(.small).frame(width: 18)
             } else {
-                Image(systemName: run.action.systemImage).frame(width: 18)
+                Image(systemName: run.systemImage).frame(width: 18)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(run.action.title)
+                Text(run.title)
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
             }
         }
