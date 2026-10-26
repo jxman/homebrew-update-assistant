@@ -170,6 +170,43 @@ struct BrewConfigTests {
 
 @Suite("Security report")
 struct VulnerabilityTests {
+    @Test func separatesFindingsForRemovedPackages() throws {
+        let findings = try Vulnerability.parseGrypeReport(Data(Fixtures.grypeJSON.utf8))
+        let packages = Set(findings.map(\.homebrewPackage))
+        let kept = try #require(packages.first)
+        let split = Vulnerability.partition(findings, installedFormulae: [kept])
+
+        #expect(Set(split.current.map(\.homebrewPackage)) == [kept])
+        #expect(Set(split.removed.map(\.homebrewPackage)) == packages.subtracting([kept]))
+        #expect(split.current.count + split.removed.count == findings.count)
+
+        // terraform-docs was uninstalled after the scan; findings without a package are kept
+        let tflint = finding("tflint"), docs = finding("terraform-docs"), unknown = finding("Unknown")
+        let result = Vulnerability.partition([tflint, docs, unknown], installedFormulae: ["tflint"])
+        #expect(result.current == [tflint, unknown])
+        #expect(result.removed == [docs])
+    }
+
+    private func finding(_ package: String) -> Vulnerability {
+        Vulnerability(
+            advisoryID: "CVE-\(package)", severity: .high, component: "x", installedVersion: "1", fixVersions: [],
+            homebrewPackage: package, advisoryURL: nil, summary: nil
+        )
+    }
+
+    @Test func countsTableReportLikeTheScript() {
+        // Same rule as the script's awk: Critical/High/Medium rows, minus the header and purl errors
+        let report = """
+        NAME                    INSTALLED  FIXED IN  TYPE       VULNERABILITY        SEVERITY  EPSS         RISK
+        google.golang.org/grpc  v1.78.0    1.79.3    go-module  GHSA-p77j-4mvh-x3m3  Critical  1.6% (75th)  1.5
+        urllib3                 2.6.3      2.7.0     python     GHSA-mf9v-mfxr-j63j  High      0.9% (57th)  0.7
+        zlib                    1.3        1.3.1     binary     CVE-2026-0001        Low       0.1% (10th)  0.1
+        error purl High something
+        """
+        #expect(Vulnerability.countInTableReport(report) == 2)
+        #expect(Vulnerability.countInTableReport("") == 0)
+    }
+
     @Test func parsesAndDeduplicatesGrypeMatches() throws {
         let vulnerabilities = try Vulnerability.parseGrypeReport(Data(Fixtures.grypeJSON.utf8))
 

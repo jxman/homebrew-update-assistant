@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   brew doctor prints, each with a Copy button). Tracks issues across runs (first seen, how
   often, fixed recently), charts the issue count, and has **Check Now** (⇧⌘D) to run
   `brew doctor` read-only and confirm a fix. Sidebar badge and dashboard card show open issues
+- Security trend chart spans a fixed 7 days with a label per day, and includes runs from
+  before run summaries existed (counted from their `*.security.log` the same way the script does)
+- Security hides findings for formulae uninstalled since the scan (with a note naming them and
+  a "Show them" link), and **Scan Now** (⇧⌘S) runs the script's grype scan on demand
 #### Fixed
 - Runs started from the app, and the app's own `brew` calls, used a shorter PATH than the
   LaunchAgent, so Brewfile backups from app runs left out VS Code extensions

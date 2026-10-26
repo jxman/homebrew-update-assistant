@@ -365,6 +365,11 @@ most of the UI; AppKit, the older macOS framework underneath, is still there for
 `.interpolationMethod(.stepEnd)` so the issue count stays flat between reports instead of
 sloping.
 
+The Security chart fixes its axes instead of letting Charts fit them to the data:
+`.chartXScale(domain: trendStart...Date.now)` always shows the last 7 days, `.chartXAxis`
+with `AxisMarks(values: .stride(by: .day))` puts one labelled tick on each day, and
+`.chartYScale(domain: 0...max)` starts at zero so a drop looks as big as it really is.
+
 ## Trying the actions safely
 
 - **Dry Run** (toolbar Update menu ▾, or the menu bar) changes nothing and shows the live output.
@@ -383,6 +388,8 @@ sloping.
 - **Backups** only reads files until you press **Reinstall Missing…**, which asks first and
   runs `brew bundle install --no-upgrade` for just the missing taps, formulae and casks.
 - **Links**: with the app running, try `open "brewupdates://installed"` in Terminal.
+- **Security → Scan Now** (⇧⌘S) runs grype read-only (about 20 seconds) and shows the result
+  as the newest scan. Findings for packages you've uninstalled since a scan are hidden.
 - **Doctor** only reads logs. **Check Now** (⇧⌘D) runs `brew doctor`, which changes nothing.
   Suggested fixes are only copied to the clipboard; you run them yourself in Terminal.
 

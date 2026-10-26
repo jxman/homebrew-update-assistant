@@ -43,6 +43,10 @@ struct RunStore: Sendable {
         return String(decoding: data, as: UTF8.self)
     }
 
+    func vulnerabilityCount(at url: URL) async throws -> Int {
+        Vulnerability.countInTableReport(try await readText(at: url))
+    }
+
     func loadDoctorReport(at url: URL) async throws -> DoctorReport {
         DoctorReport.parse(try await readText(at: url))
     }

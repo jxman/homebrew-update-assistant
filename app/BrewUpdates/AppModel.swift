@@ -44,6 +44,8 @@ final class AppModel {
     let paths: AppPaths
     /// brew doctor reports and their history
     let doctor: DoctorModel
+    /// Scans started from the Security screen
+    let security: SecurityScanModel
     private let brew = BrewService()
     private let watcher = DirectoryWatcher()
     private var runsReloadTask: Task<Void, Never>?
@@ -54,6 +56,7 @@ final class AppModel {
     init(paths: AppPaths = .current) {
         self.paths = paths
         self.doctor = DoctorModel(paths: paths, brew: BrewService())
+        self.security = SecurityScanModel(scanner: SecurityScanner(brewExecutable: BrewService.locate()))
     }
 
     // MARK: Derived values (computed from the loaded data, so they never go stale)

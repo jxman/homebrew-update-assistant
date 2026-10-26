@@ -1,7 +1,7 @@
 import Charts
 import SwiftUI
 
-/// Vulnerabilities from a run's grype report, with severity filters and a trend chart.
+/// Vulnerabilities from a run's grype report (or a Scan Now), with severity filters and a trend chart.
 struct SecurityView: View {
     @Environment(AppModel.self) private var model
 
@@ -12,6 +12,35 @@ struct SecurityView: View {
     @State private var severities: Set<Severity> = [.critical, .high]
     @State private var searchText = ""
     @State private var sortOrder = [KeyPathComparator(\Vulnerability.severity)]
+    /// Counts read from `*.security.log` for runs without a summary (before script v2.2.0)
+    @State private var logCounts: [Run.ID: Int] = [:]
+    /// Also list findings for formulae uninstalled since the scan
+    @State private var showsRemoved = false
+
+    private static let trendDays = 7
+    /// Picker tag for the in-memory Scan Now result (run IDs are dates, so this can't clash)
+    private static let manualScanID = "scan-now"
+
+    private var isShowingManualScan: Bool { selectedRunID == Self.manualScanID }
+
+    /// The selected report: a run's saved scan, or the latest Scan Now
+    private var allFindings: [Vulnerability] {
+        isShowingManualScan ? model.security.latest?.vulnerabilities ?? [] : vulnerabilities
+    }
+
+    /// Findings split by whether their formula is still installed. Until the package list has
+    /// loaded, everything counts as current, so nothing is hidden by mistake.
+    private var partitioned: (current: [Vulnerability], removed: [Vulnerability]) {
+        guard !model.installed.isEmpty else { return (allFindings, []) }
+        let formulae = Set(model.installed.filter { $0.kind == .formula }.map(\.name))
+        return Vulnerability.partition(allFindings, installedFormulae: formulae)
+    }
+
+    private var visibleFindings: [Vulnerability] {
+        showsRemoved ? allFindings : partitioned.current
+    }
+
+    private var removedPackages: Set<String> { Set(partitioned.removed.map(\.homebrewPackage)) }
 
     /// Runs that produced a JSON security report
     private var scannedRuns: [Run] {
@@ -19,7 +48,7 @@ struct SecurityView: View {
     }
 
     private var rows: [Vulnerability] {
-        vulnerabilities
+        visibleFindings
             .filter { severities.contains($0.severity) }
             .filter { searchText.isEmpty
                 || $0.homebrewPackage.localizedCaseInsensitiveContains(searchText)
@@ -39,22 +68,43 @@ struct SecurityView: View {
         .toolbar {
             ToolbarItem {
                 Picker("Scan", selection: $selectedRunID) {
+                    if let scan = model.security.latest {
+                        Text("\(scan.date.formatted(date: .abbreviated, time: .shortened)) (Scan Now)")
+                            .tag(Optional(Self.manualScanID))
+                    }
                     ForEach(scannedRuns) { run in
                         Text(run.date.formatted(date: .abbreviated, time: .shortened)).tag(Optional(run.id))
                     }
                 }
-                .frame(minWidth: 180)
+                .frame(minWidth: 200)
+            }
+            ToolbarItem {
+                Button {
+                    Task {
+                        await model.security.scanNow()
+                        if model.security.scanError == nil {
+                            selectedRunID = Self.manualScanID
+                        }
+                    }
+                } label: {
+                    Label("Scan Now", systemImage: "magnifyingglass")
+                }
+                // Scanning while packages are being upgraded would read a half-changed Cellar
+                .disabled(model.security.isScanning || model.isRunInProgress)
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+                .help("Scan installed packages with grype now, like a run's security step (⇧⌘S)")
             }
         }
         .onAppear {
             // Start from the severities the script is configured to report
             severities = model.config.securitySeverities
             if selectedRunID == nil {
-                selectedRunID = scannedRuns.first?.id
+                selectedRunID = model.security.latest == nil ? scannedRuns.first?.id : Self.manualScanID
             }
         }
         // Reload whenever a different scan is picked
         .task(id: selectedRunID) { await loadReport() }
+        .task(id: runsNeedingLogCounts.map(\.id)) { await loadLogCounts() }
     }
 
     private var header: some View {
@@ -72,42 +122,98 @@ struct SecurityView: View {
                 }
                 Text("\(Set(rows.map(\.homebrewPackage)).count) Homebrew packages affected")
                     .foregroundStyle(.secondary)
+                if !removedPackages.isEmpty {
+                    removedNote
+                }
+                if model.security.isScanning {
+                    ProgressView("Scanning installed packages… this can take up to a minute").controlSize(.small)
+                }
+                if let error = model.security.scanError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                }
             }
             Spacer()
-            if trend.count > 1 {
+            if !trend.isEmpty {
                 trendChart
             }
         }
     }
 
-    /// Vulnerability counts from run summaries (available for runs from script v2.2.0 on)
+    /// Why some findings aren't listed, with a button to show them anyway
+    private var removedNote: some View {
+        HStack {
+            Label(
+                "\(partitioned.removed.count) findings \(showsRemoved ? "are" : "hidden") for packages removed since this scan: "
+                    + removedPackages.sorted().joined(separator: ", "),
+                systemImage: showsRemoved ? "eye" : "eye.slash"
+            )
+            .foregroundStyle(.secondary)
+            Button(showsRemoved ? "Hide them" : "Show them") { showsRemoved.toggle() }
+                .buttonStyle(.link)
+        }
+        .font(.callout)
+    }
+
+    /// Start of the chart: midnight, `trendDays - 1` days ago, so today is the last of the days
+    private var trendStart: Date {
+        let today = Calendar.current.startOfDay(for: .now)
+        return Calendar.current.date(byAdding: .day, value: -(Self.trendDays - 1), to: today) ?? today
+    }
+
+    private var recentRuns: [Run] {
+        model.runs.filter { $0.date >= trendStart }
+    }
+
+    /// Older runs have no summary, only the scan's text report
+    private var runsNeedingLogCounts: [Run] {
+        recentRuns.filter { $0.summary == nil && $0.files[.security] != nil }
+    }
+
+    /// Vulnerability counts over the last week, oldest first: from run summaries, or counted
+    /// from the text report for runs from before summaries existed
     private var trend: [(date: Date, count: Int)] {
-        model.runs
+        recentRuns
             .compactMap { run in
-                guard let security = run.summary?.security, security.status == "completed" else { return nil }
-                return (run.date, security.vulnerabilityCount)
+                if let security = run.summary?.security {
+                    return security.status == "completed" ? (run.date, security.vulnerabilityCount) : nil
+                }
+                return logCounts[run.id].map { (run.date, $0) }
             }
             .reversed()
     }
 
     private var trendChart: some View {
-        Chart(trend, id: \.date) { point in
-            LineMark(x: .value("Date", point.date), y: .value("Vulnerabilities", point.count))
-            PointMark(x: .value("Date", point.date), y: .value("Vulnerabilities", point.count))
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Last \(Self.trendDays) days").font(.caption).foregroundStyle(.secondary)
+            Chart(trend, id: \.date) { point in
+                LineMark(x: .value("Date", point.date), y: .value("Vulnerabilities", point.count))
+                PointMark(x: .value("Date", point.date), y: .value("Vulnerabilities", point.count))
+                    .symbolSize(20)
+            }
+            .chartYAxisLabel("Findings")
+            // A fixed week, so the chart always spans the same days however many runs there were
+            .chartXScale(domain: trendStart...Date.now)
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .day)) {
+                    AxisGridLine()
+                    AxisValueLabel(format: .dateTime.weekday(.abbreviated), centered: true)
+                }
+            }
+            // Start at zero so a drop (e.g. after upgrading) looks as big as it is
+            .chartYScale(domain: 0...max(1, trend.map(\.count).max() ?? 0))
+            .frame(width: 380, height: 110)
         }
-        .chartYAxisLabel("Findings")
-        .frame(width: 280, height: 90)
     }
 
     @ViewBuilder
     private var content: some View {
-        if scannedRuns.isEmpty {
+        if scannedRuns.isEmpty && model.security.latest == nil {
             EmptyStateView(
                 title: "No security scans",
                 systemImage: "lock.shield",
-                message: "Enable SECURITY_SCAN_ENABLED and install grype to scan installed packages."
+                message: "Runs scan when SECURITY_SCAN_ENABLED is on and grype is installed. Click Scan Now to scan straight away."
             )
-        } else if isLoading {
+        } else if isLoading && !isShowingManualScan {
             ProgressView("Reading scan…").frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let loadError {
             EmptyStateView(title: "Couldn't read scan", systemImage: "exclamationmark.triangle", message: loadError)
@@ -117,7 +223,12 @@ struct SecurityView: View {
                     Pill(text: item.severity.rawValue, color: item.severity.color)
                 }
                 .width(80)
-                TableColumn("Homebrew Package", value: \.homebrewPackage)
+                TableColumn("Homebrew Package", value: \.homebrewPackage) { item in
+                    // Only shown after "Show them": struck through, since it's no longer installed
+                    Text(item.homebrewPackage)
+                        .strikethrough(removedPackages.contains(item.homebrewPackage))
+                        .foregroundStyle(removedPackages.contains(item.homebrewPackage) ? .secondary : .primary)
+                }
                 TableColumn("Component", value: \.component)
                 TableColumn("Installed", value: \.installedVersion)
                 TableColumn("Fixed In") { item in
@@ -135,7 +246,7 @@ struct SecurityView: View {
     }
 
     private func count(_ severity: Severity) -> Int {
-        vulnerabilities.count { $0.severity == severity }
+        visibleFindings.count { $0.severity == severity }
     }
 
     private func binding(for severity: Severity) -> Binding<Bool> {
@@ -147,7 +258,16 @@ struct SecurityView: View {
         )
     }
 
+    private func loadLogCounts() async {
+        let store = RunStore(paths: model.paths)
+        for run in runsNeedingLogCounts where logCounts[run.id] == nil {
+            guard let url = run.files[.security] else { continue }
+            logCounts[run.id] = try? await store.vulnerabilityCount(at: url)
+        }
+    }
+
     private func loadReport() async {
+        // A Scan Now result is already in memory (`allFindings` reads it)
         guard let run = model.run(withID: selectedRunID), let url = run.files[.securityJSON] else {
             vulnerabilities = []
             return
