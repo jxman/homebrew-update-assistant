@@ -191,6 +191,27 @@ The Homebrew Update Assistant follows a modular, pipeline-based architecture wit
 - **Security**: Input validation, safe command execution, no eval usage
 - **Automation**: LaunchAgent/cron support with notification integration
 
+## 🖥️ SwiftUI App (in progress)
+
+A native macOS menu bar + window app in [`app/`](app/) sits on top of the script. The script and
+its 3 AM LaunchAgent stay the source of truth; the app reads their run summaries, logs and
+security reports, and shows installed packages from Homebrew.
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| 0 | CLI contract: run summaries, run lock, `--packages`, `--no-color` | ✅ Done (v2.2.0) |
+| 1 | Read-only app: Dashboard, Installed, Runs & logs, Security, menu bar | ✅ Done |
+| 2 | Actions: run now / dry run with live output, upgrade selected, pin & exclude | Planned |
+| 3 | Edit schedule and settings | Planned |
+| 4 | Backup diff/restore, notification → app | Planned |
+
+```bash
+brew install xcodegen
+cd app && xcodegen generate && open BrewUpdates.xcodeproj   # then ⌘R
+```
+
+See [app/GUIDE.md](app/GUIDE.md) for the Xcode workflow and a tour of the SwiftUI code.
+
 ## 📋 Prerequisites
 
 - **🍺 Homebrew**: Must be installed ([Install Homebrew](https://brew.sh/))

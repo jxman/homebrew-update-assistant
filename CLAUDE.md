@@ -83,6 +83,21 @@ shellcheck brew-updates.command
 ./scripts/setup.sh
 ```
 
+## SwiftUI App (`app/`)
+
+- Native macOS app (menu bar + window), Swift 6, macOS 15+. **Read-only so far (phase 1)**; actions come in phase 2
+- The Xcode project is **generated** by XcodeGen from `app/project.yml` and is gitignored. Run `cd app && xcodegen generate` after adding/removing files; never change settings in Xcode's project editor
+- Layout: `Models/` (pure parsing, no UI) → `Services/` (files, `brew`, `launchctl`) → `AppModel.swift` (`@Observable`, `@MainActor`) → `Views/`
+- The app must only ever invoke the **deployed** `~/bin/brew-updates.command`, read run data via `*.summary.json` (docs/run-summary-schema.md), and check `SystemStatus.minimumScriptVersion`
+- All `brew` calls set `HOMEBREW_NO_AUTO_UPDATE=1` so viewing the app never changes Homebrew state
+- Tests (Swift Testing) compile `Models/` and `Services/` directly into an unhosted test bundle. Hosted tests hang because a menu bar app never quits
+- Build/test from the terminal with the default DerivedData (`~/Library/Developer`). A `-derivedDataPath` inside `~/Documents` makes `xctest` block on a Documents permission prompt:
+  ```bash
+  cd app && xcodebuild -project BrewUpdates.xcodeproj -scheme BrewUpdates -destination 'platform=macOS,arch=arm64' test
+  ```
+- Lint: `swiftlint lint --strict` (config `app/.swiftlint.yml`), enforced by the pre-commit hook `hooks/swiftlint.sh`
+- The user is learning SwiftUI and Xcode: explain new SwiftUI concepts briefly in code comments and keep `app/GUIDE.md` current
+
 ## Code Structure
 
 ### Main Functions Flow

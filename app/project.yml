@@ -1,0 +1,71 @@
+# XcodeGen project definition - the source of truth for the Xcode project.
+# BrewUpdates.xcodeproj is generated from this file and is not committed.
+# Regenerate after adding/removing files or changing settings:
+#   cd app && xcodegen generate
+name: BrewUpdates
+
+options:
+  bundleIdPrefix: com.jxman
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    # Ad-hoc "Sign to Run Locally" - no Apple developer account needed for a personal app
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+
+targets:
+  BrewUpdates:
+    type: application
+    platform: macOS
+    sources:
+      - path: BrewUpdates
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jxman.BrewUpdates
+        PRODUCT_NAME: Brew Updates
+        # Keep the Swift module name space-free for `@testable import BrewUpdates`
+        PRODUCT_MODULE_NAME: BrewUpdates
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Brew Updates
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        # The app must read ~/.brew_logs, run brew and launchctl - not possible inside the App Sandbox
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: NO
+
+  # Tests compile the UI-free Models and Services code directly instead of running inside
+  # the app ("hosted" tests). A menu bar app never quits on its own, so a hosted test run
+  # would hang after the tests finish; unhosted tests are also faster.
+  BrewUpdatesTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: BrewUpdatesTests
+      - path: BrewUpdates/Models
+      - path: BrewUpdates/Services
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jxman.BrewUpdatesTests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  BrewUpdates:
+    build:
+      targets:
+        BrewUpdates: all
+        BrewUpdatesTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - BrewUpdatesTests
