@@ -61,6 +61,21 @@ struct ContentView: View {
         } message: { action in
             Text(confirmationMessage(for: action))
         }
+        // Uninstalls are requested from Installed and Doctor, so the dialog lives here
+        .confirmationDialog(
+            uninstallTitle,
+            isPresented: Binding(
+                get: { model.pendingUninstall != nil },
+                set: { if !$0 { model.pendingUninstall = nil } }
+            ),
+            presenting: model.pendingUninstall
+        ) { plan in
+            // `role: .destructive` shows the button in red
+            Button(uninstallTitle, role: .destructive) { model.uninstall(plan) }
+            Button("Cancel", role: .cancel) {}
+        } message: { plan in
+            Text(plan.message)
+        }
         .alert(
             "Couldn't change packages",
             isPresented: Binding(
@@ -73,6 +88,11 @@ struct ContentView: View {
         } message: { error in
             Text(error)
         }
+    }
+
+    private var uninstallTitle: String {
+        guard let names = model.pendingUninstall?.names else { return "" }
+        return names.count == 1 ? "Uninstall \(names[0])?" : "Uninstall \(names.count) Packages?"
     }
 
     private func confirmationMessage(for action: ScriptAction) -> String {

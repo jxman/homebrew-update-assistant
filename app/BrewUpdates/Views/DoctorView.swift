@@ -18,9 +18,11 @@ struct DoctorView: View {
 
     private var isShowingLatest: Bool { snapshot?.id == doctor.latest?.id }
 
-    /// Most urgent first
+    /// Most urgent first. The app's own checks describe now, so they join the newest report only.
     private var issues: [DoctorIssue] {
-        (snapshot?.report.issues ?? []).sorted { ($0.importance, $0.headline) < ($1.importance, $1.headline) }
+        let appIssues = isShowingLatest ? model.appDoctorIssues : []
+        return ((snapshot?.report.issues ?? []) + appIssues)
+            .sorted { ($0.importance, $0.headline) < ($1.importance, $1.headline) }
     }
 
     /// Only offered next to the newest report; "fixed" means fixed as of now

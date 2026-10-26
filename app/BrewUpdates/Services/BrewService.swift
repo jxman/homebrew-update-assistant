@@ -8,7 +8,7 @@ enum BrewServiceError: LocalizedError {
     }
 }
 
-/// Homebrew queries, plus pin/unpin and Brewfile restores.
+/// Homebrew queries, plus pin/unpin, uninstalls and Brewfile restores.
 ///
 /// Every command runs with `HOMEBREW_NO_AUTO_UPDATE=1` so that brew never updates itself as
 /// a side effect; updating and upgrading are left to the script.
@@ -42,7 +42,14 @@ struct BrewService: Sendable {
 
     func installedPackages() async throws -> [InstalledPackage] {
         let result = try await run(["info", "--json=v2", "--installed"])
-        return try InstalledPackage.parseBrewInfo(result.stdout)
+        var packages = try InstalledPackage.parseBrewInfo(result.stdout)
+        // brew's record of a cask can be stale (self-updating apps) or outlive the app itself
+        let prefix = executable?.deletingLastPathComponent().deletingLastPathComponent() ?? URL(filePath: "/opt/homebrew")
+        let locator = CaskAppLocator(caskroom: prefix.appending(path: "Caskroom"))
+        for index in packages.indices where packages[index].kind == .cask {
+            packages[index].appStatus = locator.status(for: packages[index])
+        }
+        return packages
     }
 
     /// First line of `brew --version`, e.g. "Homebrew 7.0.10"
@@ -58,12 +65,12 @@ struct BrewService: Sendable {
 
     /// `brew bundle install` with live output. `--no-upgrade` only installs what is missing;
     /// anything already installed is left at its current version.
-    func launchBundleInstall(brewfile: URL) async throws -> LaunchedProcess {
+    func launchBundleInstall(brewfile: URL, askpass: URL?) async throws -> LaunchedProcess {
         guard let executable else { throw BrewServiceError.brewNotFound }
         return try await ProcessStream.launch(
             executable,
             arguments: ["bundle", "install", "--file=\(brewfile.path)", "--no-upgrade"],
-            environment: environment(for: executable)
+            environment: environment(for: executable, askpass: askpass)
         )
     }
 
@@ -73,6 +80,16 @@ struct BrewService: Sendable {
         guard let executable else { throw BrewServiceError.brewNotFound }
         let result = try await ProcessRunner.run(executable, arguments: ["doctor", "--verbose"], environment: environment(for: executable))
         return DoctorReport.parse(result.stdoutText + "\n" + result.stderrText)
+    }
+
+    /// `brew uninstall` with live output, using the arguments from an `UninstallPlan`.
+    func launchUninstall(_ plan: UninstallPlan, askpass: URL?) async throws -> LaunchedProcess {
+        guard let executable else { throw BrewServiceError.brewNotFound }
+        return try await ProcessStream.launch(
+            executable,
+            arguments: plan.arguments,
+            environment: environment(for: executable, askpass: askpass)
+        )
     }
 
     /// `brew pin` / `brew unpin`. Only formulae can be pinned.
@@ -85,8 +102,14 @@ struct BrewService: Sendable {
         return try await ProcessRunner.output(executable, arguments: arguments, environment: environment(for: executable))
     }
 
-    private func environment(for executable: URL) -> [String: String] {
+    /// `askpass`: a program that shows a password dialog. With it set, brew runs `sudo -A`, so
+    /// steps that need the administrator password ask with a dialog instead of failing for
+    /// lack of a terminal. brew passes `SUDO_ASKPASS` through its environment filter.
+    private func environment(for executable: URL, askpass: URL? = nil) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
+        if let askpass {
+            env["SUDO_ASKPASS"] = askpass.path
+        }
         // Apps launched from Finder get a minimal PATH
         env["PATH"] = Self.searchPath(brewExecutable: executable)
         env["HOMEBREW_NO_AUTO_UPDATE"] = "1"

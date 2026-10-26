@@ -34,6 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `brew doctor` read-only and confirm a fix. Sidebar badge and dashboard card show open issues
 - Security trend chart spans a fixed 7 days with a label per day, and includes runs from
   before run summaries existed (counted from their `*.security.log` the same way the script does)
+- Uninstall formulae and casks from the Installed view (right-click, inspector, or the Delete
+  key). It asks first, warns when another installed formula still needs a package, and runs
+  `brew uninstall` with live output while holding the run lock
+- Installed view checks each cask's app on disk: self-updating casks show the app's real
+  version instead of Homebrew's stale record (with "Update pending" if the app is behind),
+  and casks whose app was deleted show "App missing"
+- Doctor flags casks whose app is missing (brew doctor doesn't check this), with
+  **Clear Record** buttons that run `brew uninstall` for them
+- Uninstalls and restores that need the administrator password now ask with the macOS
+  password dialog (`Resources/brew-askpass.sh` via `SUDO_ASKPASS`) instead of failing
 - Security hides findings for formulae uninstalled since the scan (with a note naming them and
   a "Show them" link), and **Scan Now** (⇧⌘S) runs the script's grype scan on demand
 - `scripts/install-app.sh` builds the app (Release) into `/Applications` and adds a Desktop alias

@@ -38,6 +38,8 @@ enum DoctorCheck: String, CaseIterable, Sendable {
     case uncommittedChanges
     case unneededTaps
     case permissions
+    /// Found by the app itself, not brew doctor (see `DoctorIssue.missingCaskApps`)
+    case missingCaskApps
     case unknown
 
     /// Headline fragments for each check, tried in order (so "Xcode license" wins over "Xcode")
@@ -95,6 +97,10 @@ struct DoctorAdvice: Sendable {
     init(issue: DoctorIssue, in report: DoctorReport, brewPrefix: String = "/opt/homebrew") {
         summary = Self.summaries[issue.check, default: Self.unknownSummary]
             .replacingOccurrences(of: "{prefix}", with: brewPrefix)
+        if issue.check == .missingCaskApps {
+            note = "brew doctor doesn't check for this. Brew Updates found it by looking for each cask's app "
+                + "in /Applications and ~/Applications."
+        }
         if issue.check == .deletedFormula, report.issues.contains(where: { $0.check == .untrustedTaps }) {
             note = "This check also found untrusted taps. If these formulae come from those taps, "
                 + "trusting the tap (see that warning) fixes both."
@@ -128,6 +134,8 @@ struct DoctorAdvice: Sendable {
                 ) }
         case .unneededTaps:
             return whenItems(items, DoctorFix(title: "Untap them", command: "brew untap \(list)"))
+        case .missingCaskApps:
+            return items.prefix(5).map { DoctorFix(title: "To keep \($0), reinstall it instead", command: "brew reinstall --cask \($0)") }
         case .path:
             return [DoctorFix(
                 title: "Add Homebrew's shell setup to ~/.zprofile, then open a new terminal",
@@ -194,6 +202,10 @@ struct DoctorAdvice: Sendable {
         .uncommittedChanges: "Files in a tap or in Homebrew itself were edited locally, which can block updates. "
             + "Unless you made these changes on purpose, reset them.",
         .unneededTaps: "These taps aren't needed any more; their contents moved into Homebrew itself.",
+        .missingCaskApps: "These casks are still listed as installed, but their apps are gone: deleted in Finder, "
+            + "or removed or renamed by the app's own updater. Homebrew only notices removals made with brew, so the "
+            + "old record stays, shows a stale version, and can leave background helpers behind. Clearing the record "
+            + "runs the cask's uninstall steps, which also removes those helpers.",
         .permissions: "Homebrew can't write to some of its own folders, so installs and upgrades will fail. This "
             + "usually follows running brew with sudo, or migrating to a new Mac."
     ]

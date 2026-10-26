@@ -79,7 +79,8 @@ enum Fixtures {
           "name": "z3", "full_name": "z3", "desc": "High-performance theorem prover",
           "homepage": "https://github.com/Z3Prover/z3", "tap": "homebrew/core",
           "versions": { "stable": "5.3.2" },
-          "installed": [{ "version": "5.3.1", "installed_on_request": true, "time": 1790060435 }],
+          "installed": [{ "version": "5.3.1", "installed_on_request": true, "time": 1790060435,
+                          "runtime_dependencies": [{ "full_name": "abseil", "version": "20260817.0" }] }],
           "outdated": true, "pinned": false
         },
         {

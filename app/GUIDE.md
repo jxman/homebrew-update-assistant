@@ -43,6 +43,7 @@ and run lock. The only direct changes are `brew pin`/`unpin`, the settings in
 | `BrewUpdates/Models/` | Plain data types and parsers (run summary, logs, schedule, grype report) | No |
 | `BrewUpdates/Services/` | Talking to the system: files, `brew`, `launchctl` | No |
 | `BrewUpdates/AppModel.swift` | The single shared state object the screens read, and the actions (run, stop, pin, exclude) | No (but drives the UI) |
+| `BrewUpdates/AppModel+Packages.swift` | Restore and uninstall: brew commands run with live output while holding the run lock | No |
 | `BrewUpdates/LiveRun.swift` | Output and state of a run started from the app | No |
 | `BrewUpdates/DoctorModel.swift` | brew doctor reports from all runs, plus Check Now | No |
 | `BrewUpdates/Views/` | SwiftUI screens and small components | Yes |
@@ -396,6 +397,9 @@ with `AxisMarks(values: .stride(by: .day))` puts one labelled tick on each day, 
   rewritten.
 - **Backups** only reads files until you press **Reinstall Missing…**, which asks first and
   runs `brew bundle install --no-upgrade` for just the missing taps, formulae and casks.
+- **Uninstall…** (right-click a package, the inspector, or the Delete key) always asks first.
+  The dialog warns if another installed formula still needs the package; brew refuses to
+  remove those anyway. Try it on something small you can reinstall, like `brew install cowsay`.
 - **Links**: with the app running, try `open "brewupdates://installed"` in Terminal.
 - **Security → Scan Now** (⇧⌘S) runs grype read-only (about 20 seconds) and shows the result
   as the newest scan. Findings for packages you've uninstalled since a scan are hidden.
@@ -438,6 +442,9 @@ Small, safe changes for practice. Use previews (⌥⌘↩) to see the result imm
 | Schedule toggle won't turn on | Check `launchctl print gui/$(id -u)/com.user.brew-update`. If the plist is missing, run `scripts/setup.sh` |
 | Clicking a notification opens the log folder, not the app | Launch the app once so it records its location in `~/.brew_logs/.brew-updates-app`, and make sure the deployed script is v2.3.0+ (`scripts/setup.sh`) |
 | A backup shows many `vscode` entries as added/missing | Backups made by app runs before phase 4 lacked VS Code extensions (the app's PATH didn't include `/usr/local/bin`). They age out after `MAX_BACKUP_COUNT` runs |
+| A cask shows "App missing" | The app was deleted (or renamed) outside Homebrew, but brew still lists it. Doctor lists these with **Clear Record…** buttons, or `brew reinstall --cask <name>` gets the app back |
+| A self-updating cask looks out of date | Homebrew doesn't upgrade `auto_updates` casks, so its record is old. The Installed column shows the app's own version; "Update pending" means the app hasn't updated itself yet — open it |
+| A password dialog from "Brew Updates" appears during an uninstall or restore | Expected: brew needs administrator rights to remove or install system files (installer receipts, background helpers). It comes from the app's `brew-askpass.sh`; Cancel stops that step |
 | Update / Dry Run greyed out | A run is already in progress (scheduled or from Terminal), or the deployed script is older than the app needs (see the orange banner) |
 | Run ends at once with "Another update is already running" | Exit code 5: another run holds `~/.brew_logs/.brew-updates.lock`. Wait for it, or check the Runs list |
 | Preview shows an error or stops updating | ⌥⌘P to refresh; ⌘⇧K then ⌘B if it persists |

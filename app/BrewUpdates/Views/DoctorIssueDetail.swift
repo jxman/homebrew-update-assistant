@@ -6,6 +6,7 @@ struct DoctorIssueDetail: View {
     let report: DoctorReport
     let history: DoctorIssueHistory?
 
+    @Environment(AppModel.self) private var model
     @State private var showsMessage = false
 
     private var advice: DoctorAdvice {
@@ -40,10 +41,14 @@ struct DoctorIssueDetail: View {
                 if !issue.items.isEmpty {
                     affected
                 }
+                if issue.check == .missingCaskApps && !isResolved {
+                    clearRecords
+                }
                 if !advice.fixes.isEmpty && !isResolved {
                     fixes
                 }
                 // DisclosureGroup: a section the user can expand, collapsed by default here.
+                // The app's own checks have no Homebrew message.
                 if !issue.details.isEmpty {
                     DisclosureGroup("Homebrew's message", isExpanded: $showsMessage) {
                         Text(issue.details)
@@ -99,6 +104,38 @@ struct DoctorIssueDetail: View {
                         .textSelection(.enabled)
                 }
             }
+            .padding(4)
+        }
+    }
+
+    /// One-click cleanup for casks whose app is gone. Each runs `brew uninstall` after the
+    /// usual confirmation; brew asks for the password with a dialog when it needs it.
+    private var clearRecords: some View {
+        let missing = model.installed.filter(\.isAppMissing)
+        return GroupBox("Clean up") {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(missing) { package in
+                    HStack {
+                        Text(package.name).font(.callout.monospaced())
+                        if package.uninstallNeedsAdmin {
+                            Pill(text: "asks for password", color: .orange)
+                                .help("Removing it also removes system files, which needs your administrator password")
+                        }
+                        Spacer()
+                        Button("Clear Record…") { model.requestUninstall([package]) }
+                            .disabled(!model.canStartRun)
+                    }
+                }
+                if missing.count > 1 {
+                    Button("Clear All \(missing.count) Records…") { model.requestUninstall(missing) }
+                        .disabled(!model.canStartRun)
+                }
+                Text("Runs brew uninstall, which also removes anything the app left behind (such as background "
+                    + "updaters). Output appears in Runs.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(4)
         }
     }

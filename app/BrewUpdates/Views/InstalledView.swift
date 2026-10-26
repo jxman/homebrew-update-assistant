@@ -88,13 +88,16 @@ struct InstalledView: View {
                 Text(package.kind.title).foregroundStyle(.secondary)
             }
             .width(70)
-            TableColumn("Installed", value: \.installedVersion) { package in
-                Text(package.installedVersion).monospacedDigit()
+            TableColumn("Installed", value: \.displayedVersion) { package in
+                Text(package.isAppMissing ? "—" : package.displayedVersion)
+                    .monospacedDigit()
+                    .help(package.displayedVersion == package.installedVersion
+                        ? "" : "Homebrew's record says \(package.installedVersion); the app has updated itself since")
             }
             TableColumn("Latest", value: \.latestVersion) { package in
                 Text(package.latestVersion)
                     .monospacedDigit()
-                    .foregroundStyle(package.isOutdated ? .orange : .secondary)
+                    .foregroundStyle(package.isOutdated || package.isSelfUpdateBehind ? .orange : .secondary)
             }
             TableColumn("Status") { package in
                 StatusPills(package: package, isExcluded: model.config.isExcluded(package))
@@ -104,6 +107,12 @@ struct InstalledView: View {
         // row when that isn't selected.
         .contextMenu(forSelectionType: InstalledPackage.ID.self) { ids in
             PackageActions(packages: model.installed.filter { ids.contains($0.id) })
+        }
+        // The Delete key (and Edit > Delete) on the selected rows; it still asks first
+        .onDeleteCommand {
+            if model.canStartRun {
+                model.requestUninstall(selectedPackages)
+            }
         }
     }
 
@@ -124,6 +133,14 @@ private struct StatusPills: View {
     var body: some View {
         HStack(spacing: 4) {
             if package.isOutdated { Pill(text: "Outdated", color: .orange) }
+            if package.isAppMissing {
+                Pill(text: "App missing", color: .red)
+                    .help("The app was deleted outside Homebrew. Uninstall to clear the record, or reinstall it.")
+            }
+            if package.isSelfUpdateBehind {
+                Pill(text: "Update pending", color: .orange)
+                    .help("This app updates itself and hasn't installed the latest version yet. Open it to update.")
+            }
             if package.isPinned { Pill(text: "Pinned", color: .purple) }
             if isExcluded { Pill(text: "Excluded", color: .red) }
             if !package.installedOnRequest { Pill(text: "Dependency") }
@@ -148,10 +165,18 @@ private struct PackageDetailView: View {
                     StatusPills(package: package, isExcluded: config.isExcluded(package))
                 }
                 Section("Versions") {
-                    LabeledContent("Installed", value: package.installedVersion)
+                    LabeledContent("Installed", value: package.isAppMissing ? "Not on disk" : package.displayedVersion)
+                    if package.displayedVersion != package.installedVersion || package.isAppMissing {
+                        LabeledContent("Homebrew's record", value: package.installedVersion)
+                    }
                     LabeledContent("Latest", value: package.latestVersion)
                     if let date = package.installedDate {
                         LabeledContent("Installed on", value: date.formatted(date: .abbreviated, time: .omitted))
+                    }
+                }
+                if let note = appNote(for: package) {
+                    Section {
+                        Text(note).foregroundStyle(.secondary)
                     }
                 }
                 Section("Actions") {
@@ -171,6 +196,18 @@ private struct PackageDetailView: View {
         } else {
             EmptyStateView(title: "No Selection", systemImage: "shippingbox", message: "Select a package to see details.")
         }
+    }
+
+    private func appNote(for package: InstalledPackage) -> String? {
+        if package.isAppMissing {
+            return "The app isn't on disk any more, so only Homebrew's record is left. Uninstall to clear it, "
+                + "or run brew reinstall --cask \(package.name) in Terminal to get it back."
+        }
+        if package.autoUpdates {
+            return "This app updates itself, so Homebrew and scheduled runs leave it alone. "
+                + "The installed version shown is the app's own."
+        }
+        return nil
     }
 }
 
@@ -193,7 +230,7 @@ private struct MultiSelectionView: View {
     }
 }
 
-/// Upgrade, pin and exclude for one or more packages. Used in the right-click menu (where
+/// Upgrade, pin, exclude and uninstall for one or more packages. Used in the right-click menu (where
 /// each Button becomes a menu item) and in the inspector (where they are regular buttons).
 private struct PackageActions: View {
     let packages: [InstalledPackage]
@@ -235,6 +272,14 @@ private struct PackageActions: View {
         }
         .disabled(model.isChangingPackages)
         .help("Edits EXCLUDED_FORMULAE / EXCLUDED_CASKS in ~/.brew_update_config")
+
+        Button(role: .destructive) {
+            model.requestUninstall(packages)
+        } label: {
+            Label(packages.count > 1 ? "Uninstall \(packages.count) Packages…" : "Uninstall…", systemImage: "trash")
+        }
+        .disabled(!model.canStartRun || model.isChangingPackages)
+        .help("brew uninstall, after asking first (Delete key in the table)")
     }
 }
 

@@ -36,6 +36,8 @@ final class AppModel {
     private(set) var liveRun: LiveRun?
     /// A run waiting for the user to confirm it; `ContentView` shows the dialog
     var pendingAction: ScriptAction?
+    /// An uninstall waiting for the user to confirm it; `InstalledView` shows the dialog
+    var pendingUninstall: UninstallPlan?
     /// Shown as an alert when a pin or exclusion change fails
     var actionError: String?
     /// True while a pin/unpin or exclusion change is being written
@@ -46,7 +48,8 @@ final class AppModel {
     let doctor: DoctorModel
     /// Scans started from the Security screen
     let security: SecurityScanModel
-    private let brew = BrewService()
+    // Not private: AppModel+Packages.swift uses it too
+    let brew = BrewService()
     private let watcher = DirectoryWatcher()
     private var runsReloadTask: Task<Void, Never>?
     private var liveRunTask: Task<Void, Never>?
@@ -74,8 +77,10 @@ final class AppModel {
     }
     var canStartRun: Bool { !isRunInProgress && !isScriptOutdated }
 
-    /// brew doctor's newest findings (sidebar badge and dashboard)
-    var doctorIssues: [DoctorIssue] { doctor.latest?.report.issues ?? [] }
+    /// Problems the app finds itself, which brew doctor doesn't check
+    var appDoctorIssues: [DoctorIssue] { [DoctorIssue.missingCaskApps(in: installed)].compactMap { $0 } }
+    /// brew doctor's newest findings plus the app's own (sidebar badge and dashboard)
+    var doctorIssues: [DoctorIssue] { (doctor.latest?.report.issues ?? []) + appDoctorIssues }
     var nextScheduledRun: Date? { isLaunchAgentLoaded == false ? nil : schedule?.nextRun(after: .now) }
 
     var isScriptOutdated: Bool {
@@ -227,7 +232,7 @@ extension AppModel {
     /// Starts a command, shows its output as the live run, and refreshes everything after.
     /// `writesRunFiles`: the script leaves files in ~/.brew_logs to link the live run to.
     /// `finally` runs once the command has exited (or failed to start).
-    private func runLive(
+    func runLive(
         title: String,
         systemImage: String,
         writesRunFiles: Bool,
@@ -263,37 +268,6 @@ extension AppModel {
                 run.runID = runs.first { $0.date >= run.startedAt.addingTimeInterval(-2) }?.id
             }
         }
-    }
-
-    /// Reinstalls backup entries that are missing now (`brew bundle install --no-upgrade`).
-    /// Only taps, formulae and casks; nothing is uninstalled or downgraded. Holds the script's
-    /// run lock so a scheduled run can't start partway through.
-    func restore(_ entries: [BrewfileEntry], from backup: Backup) {
-        let restorable = entries.filter(\.isRestorable)
-        guard !restorable.isEmpty, canStartRun else { return }
-
-        let lock = RunLock(paths: paths)
-        let brewfile = FileManager.default.temporaryDirectory.appending(path: "BrewUpdates-restore-\(backup.id).Brewfile")
-        do {
-            try lock.acquire()
-            try Brewfile.text(for: restorable).write(to: brewfile, atomically: true, encoding: .utf8)
-        } catch {
-            lock.release()
-            actionError = error.localizedDescription
-            return
-        }
-
-        let brew = brew
-        runLive(
-            title: "Restore from \(backup.date.formatted(date: .abbreviated, time: .shortened)) Backup",
-            systemImage: "arrow.uturn.backward.circle",
-            writesRunFiles: false,
-            finally: {
-                lock.release()
-                try? FileManager.default.removeItem(at: brewfile)
-            },
-            launch: { try await brew.launchBundleInstall(brewfile: brewfile) }
-        )
     }
 
     /// What is installed now in Brewfile form, for comparing with backups
