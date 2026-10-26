@@ -77,6 +77,14 @@ repos:
         files: \.(sh|command|bash)$
         exclude: ^(\.git|\.github)/
 
+      # Lint the SwiftUI app; fails closed with an install hint if SwiftLint is missing
+      - id: swiftlint
+        name: SwiftLint - SwiftUI app
+        entry: ./hooks/swiftlint.sh
+        language: script
+        files: ^app/.*\.swift$
+        pass_filenames: false
+
       # Custom hook to ensure scripts are executable
       - id: check-script-executable
         name: Ensure scripts are executable

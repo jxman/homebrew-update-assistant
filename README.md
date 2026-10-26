@@ -191,6 +191,35 @@ The Homebrew Update Assistant follows a modular, pipeline-based architecture wit
 - **Security**: Input validation, safe command execution, no eval usage
 - **Automation**: LaunchAgent/cron support with notification integration
 
+## 🖥️ SwiftUI App (in progress)
+
+A native macOS menu bar + window app in [`app/`](app/) sits on top of the script. The script and
+its 3 AM LaunchAgent stay the source of truth; the app reads their run summaries, logs and
+security reports, shows installed packages from Homebrew, and can start the deployed script
+itself (update, dry run, or selected packages) with live output. Its Settings window edits
+the LaunchAgent schedule and `~/.brew_update_config`, and its Backups screen compares
+Brewfile backups with what's installed and reinstalls anything missing. Its Doctor screen
+explains each `brew doctor` warning in plain language, suggests fixes with copyable commands,
+and tracks when each issue first appeared and when it was fixed.
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| 0 | CLI contract: run summaries, run lock, `--packages`, `--no-color` | ✅ Done (v2.2.0) |
+| 1 | Read-only app: Dashboard, Installed, Runs & logs, Security, menu bar | ✅ Done |
+| 2 | Actions: run now / dry run with live output, upgrade selected, pin & exclude | ✅ Done |
+| 3 | Settings window: edit the schedule (on/off, time, days, flags) and config file settings | ✅ Done |
+| 4 | Menu bar/Dock status, backup compare and restore, notifications open the app | ✅ Done |
+
+```bash
+brew install xcodegen
+cd app && xcodegen generate && open BrewUpdates.xcodeproj   # then ⌘R
+
+# Or build a Release copy into /Applications with a Desktop alias (re-run after app changes)
+./scripts/install-app.sh
+```
+
+See [app/GUIDE.md](app/GUIDE.md) for the Xcode workflow and a tour of the SwiftUI code.
+
 ## 📋 Prerequisites
 
 - **🍺 Homebrew**: Must be installed ([Install Homebrew](https://brew.sh/))
@@ -294,7 +323,24 @@ For detailed deployment and customization options, see [DEPLOYMENT.md](DEPLOYMEN
 | `-s, --skip-casks` | Skip cask updates (formulae only) |
 | `-c, --skip-cleanup` | Skip cleanup operations |
 | `--skip-security-scan` | Skip vulnerability scanning (requires Grype) |
+| `-p, --packages LIST` | Only upgrade these packages (space- or comma-separated); exclusions and pins still apply |
+| `--no-color` | Disable colored output (also honors the `NO_COLOR` environment variable) |
+| `--version` | Print the script version and exit |
 | `-h, --help` | Show help message with examples |
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | General error, or some package upgrades failed |
+| `2` | Network error |
+| `3` | Insufficient disk space |
+| `4` | Homebrew error (e.g. `brew update` failed after retries) |
+| `5` | Another run is already in progress (runs never overlap) |
+
+Each run also writes a machine-readable `brew_update_<RUN_ID>.summary.json` to `~/.brew_logs/`.
+See [docs/run-summary-schema.md](docs/run-summary-schema.md).
 
 ### Advanced Usage Examples
 
@@ -333,19 +379,14 @@ Create `~/.brew_update_config` to customize behavior:
 # Homebrew Update Assistant Configuration
 
 # Backup settings
-BACKUP_RETENTION_DAYS=30
-MAX_BACKUP_COUNT=10
+MAX_BACKUP_COUNT=10  # Number of Brewfile backups to keep
 
 # Log retention
-LOG_RETENTION_DAYS=30  # Auto-delete logs older than this
+LOG_RETENTION_DAYS=30  # Auto-delete per-run files (logs, reports, summaries) older than this
 
-# Update preferences
-AUTO_UPGRADE=false
-SKIP_CASKS_BY_DEFAULT=false
-CLEANUP_BY_DEFAULT=true
-
-# Logging
-LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
+# Run defaults
+SKIP_CASKS_BY_DEFAULT=false  # true = behave as if --skip-casks was passed
+CLEANUP_BY_DEFAULT=true      # false = behave as if --skip-cleanup was passed
 
 # Notifications (macOS only)
 ENABLE_NOTIFICATIONS=true  # Enable macOS notification center alerts
@@ -359,6 +400,14 @@ EXCLUDED_FORMULAE="php@7.4 node@14 python@3.9"
 EXCLUDED_CASKS="docker-desktop virtualbox"
 ```
 
+Values may be quoted and may have a trailing ` # comment`. Exclusions match exact package
+names, so excluding `node` does not exclude `node@20`. Excluded packages are never upgraded,
+and neither are pinned packages (`brew pin`).
+
+`AUTO_UPGRADE`, `LOG_LEVEL` and `BACKUP_RETENTION_DAYS` are retired and ignored if present.
+Use `--yes` for unattended upgrades, `--verbose` for detailed logs, and `MAX_BACKUP_COUNT`
+for backup rotation.
+
 ### Environment Variables
 
 | Variable | Description | Default |
@@ -367,6 +416,8 @@ EXCLUDED_CASKS="docker-desktop virtualbox"
 | `BREW_UPDATE_MAX_RETRIES` | Maximum retry attempts | 3 |
 | `BREW_UPDATE_DEBUG` | Enable debug mode | false |
 | `ENABLE_NOTIFICATIONS` | Show macOS notifications (LaunchAgent) | false |
+| `NO_COLOR` | Disable colored output when set to any value | unset |
+| `BREW_UPDATE_TRIGGER` | Label recorded as `trigger` in the run summary (e.g. `app`) | `scheduled` under the LaunchAgent, otherwise `manual` |
 
 ```bash
 # Example usage with environment variables

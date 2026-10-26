@@ -1,0 +1,89 @@
+# XcodeGen project definition - the source of truth for the Xcode project.
+# BrewUpdates.xcodeproj is generated from this file and is not committed.
+# Regenerate after adding/removing files or changing settings:
+#   cd app && xcodegen generate
+name: BrewUpdates
+
+options:
+  bundleIdPrefix: com.jxman
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+  # Marks the project as reviewed by this Xcode, so it doesn't show "Update to recommended
+  # settings". When Xcode is upgraded and shows it again, add the settings it recommends
+  # below and bump this, rather than clicking "Perform Changes" (regeneration would undo it).
+  xcodeVersion: "27.1"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    # Ad-hoc "Sign to Run Locally" - no Apple developer account needed for a personal app
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+    # Recommended by Xcode 27; only matters once the app has String Catalogs
+    STRING_CATALOG_GENERATE_SYMBOLS: YES
+
+targets:
+  BrewUpdates:
+    type: application
+    platform: macOS
+    sources:
+      - path: BrewUpdates
+    # Extra Info.plist keys, merged with the generated ones. XcodeGen writes this file on
+    # `xcodegen generate` (it's gitignored).
+    info:
+      path: BrewUpdates/Info.plist
+      properties:
+        # Registers brewupdates:// links (used by the script's notifications)
+        CFBundleURLTypes:
+          - CFBundleURLName: com.jxman.BrewUpdates
+            CFBundleURLSchemes:
+              - brewupdates
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jxman.BrewUpdates
+        PRODUCT_NAME: Brew Updates
+        # Assets.xcassets/AppIcon, generated from Icon/AppIcon.svg by Icon/make-icon.sh
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Keep the Swift module name space-free for `@testable import BrewUpdates`
+        PRODUCT_MODULE_NAME: BrewUpdates
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Brew Updates
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        # The app must read ~/.brew_logs, run brew and launchctl - not possible inside the App Sandbox
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: NO
+
+  # Tests compile the UI-free Models and Services code directly instead of running inside
+  # the app ("hosted" tests). A menu bar app never quits on its own, so a hosted test run
+  # would hang after the tests finish; unhosted tests are also faster.
+  BrewUpdatesTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: BrewUpdatesTests
+      - path: BrewUpdates/Models
+      - path: BrewUpdates/Services
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jxman.BrewUpdatesTests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  BrewUpdates:
+    build:
+      targets:
+        BrewUpdates: all
+        BrewUpdatesTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - BrewUpdatesTests

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFB547"/>
+      <stop offset="1" stop-color="#E5651C"/>
+    </linearGradient>
+    <linearGradient id="beer" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE07A"/>
+      <stop offset="1" stop-color="#F0A01A"/>
+    </linearGradient>
+    <linearGradient id="badge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4CC964"/>
+      <stop offset="1" stop-color="#22963A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- macOS icon grid: 824pt rounded square centred on a 1024 canvas, with a soft shadow -->
+  <rect x="100" y="112" width="824" height="824" rx="185" fill="#000000" opacity="0.18"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+
+  <!-- Mug handle -->
+  <rect x="540" y="440" width="170" height="230" rx="70" fill="none" stroke="#FFFFFF" stroke-width="44"/>
+
+  <!-- Glass and beer -->
+  <rect x="270" y="360" width="320" height="420" rx="44" fill="#FFFFFF"/>
+  <rect x="300" y="430" width="260" height="320" rx="26" fill="url(#beer)"/>
+  <circle cx="360" cy="660" r="14" fill="#FFFFFF" opacity="0.65"/>
+  <circle cx="420" cy="580" r="10" fill="#FFFFFF" opacity="0.65"/>
+  <circle cx="380" cy="520" r="8" fill="#FFFFFF" opacity="0.65"/>
+  <circle cx="490" cy="690" r="11" fill="#FFFFFF" opacity="0.65"/>
+  <circle cx="500" cy="530" r="7" fill="#FFFFFF" opacity="0.65"/>
+
+  <!-- Foam -->
+  <circle cx="300" cy="370" r="58" fill="#FFFFFF"/>
+  <circle cx="380" cy="330" r="72" fill="#FFFFFF"/>
+  <circle cx="475" cy="340" r="66" fill="#FFFFFF"/>
+  <circle cx="556" cy="372" r="54" fill="#FFFFFF"/>
+  <rect x="270" y="360" width="320" height="70" fill="#FFFFFF"/>
+
+  <!-- Upgrade badge -->
+  <circle cx="712" cy="712" r="138" fill="#FFFFFF"/>
+  <circle cx="712" cy="712" r="118" fill="url(#badge)"/>
+  <path d="M712 632 L782 712 L740 712 L740 790 L684 790 L684 712 L642 712 Z" fill="#FFFFFF"/>
+</svg>

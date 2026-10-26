@@ -5,6 +5,110 @@ All notable changes to the Homebrew Update Assistant will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### SwiftUI App
+
+#### Added
+- Phase 1: native macOS menu bar + window app in `app/` with Dashboard, Installed packages,
+  Runs & log viewer, and Security report views, reading `*.summary.json` and watching `~/.brew_logs`
+- Phase 2: run the deployed script from the app (Update All, Dry Run, upgrade selected packages)
+  with live output, a Stop button that cancels cleanly, and a confirmation before any change
+- Phase 2: pin/unpin formulae and add/remove exclusions in `~/.brew_update_config` from the
+  Installed view (multi-select and right-click menu)
+- Quitting while an update is running asks first and stops the run cleanly
+- Phase 3: Settings window (⌘,). The Schedule tab turns scheduled runs on/off and sets
+  daily/weekly/monthly timing and run flags, rewriting the LaunchAgent plist (with a backup)
+  and reloading it. The Updates tab edits `~/.brew_update_config` (defaults, backup and log
+  retention, notifications, security scan, exclusions), rewriting only changed keys
+- Phase 4: the menu bar icon warns when the last run failed, the Dock icon shows the update
+  count, and the count refreshes after scheduled runs and hourly
+- Phase 4: Backups screen comparing each Brewfile backup with what's installed now or with
+  the previous backup, and reinstalling missing taps, formulae and casks while holding the
+  run lock
+- Phase 4: `brewupdates://` links (from notifications or `open`) jump to a run or section
+- Doctor screen: parses every run's `*.doctor.log` into issues with a plain-language
+  explanation, affected packages/taps, and suggested fixes (the app's own plus the commands
+  brew doctor prints, each with a Copy button). Tracks issues across runs (first seen, how
+  often, fixed recently), charts the issue count, and has **Check Now** (⇧⌘D) to run
+  `brew doctor` read-only and confirm a fix. Sidebar badge and dashboard card show open issues
+- Security trend chart spans a fixed 7 days with a label per day, and includes runs from
+  before run summaries existed (counted from their `*.security.log` the same way the script does)
+- Uninstall formulae and casks from the Installed view (right-click, inspector, or the Delete
+  key). It asks first, warns when another installed formula still needs a package, and runs
+  `brew uninstall` with live output while holding the run lock
+- Installed view checks each cask's app on disk: self-updating casks show the app's real
+  version instead of Homebrew's stale record (with "Update pending" if the app is behind),
+  and casks whose app was deleted show "App missing"
+- Doctor flags casks whose app is missing (brew doctor doesn't check this), with
+  **Clear Record** buttons that run `brew uninstall` for them
+- Uninstalls and restores that need the administrator password now ask with the macOS
+  password dialog (`Resources/brew-askpass.sh` via `SUDO_ASKPASS`) instead of failing
+- Security hides findings for formulae uninstalled since the scan (with a note naming them and
+  a "Show them" link), and **Scan Now** (⇧⌘S) runs the script's grype scan on demand
+- `scripts/install-app.sh` builds the app (Release) into `/Applications` and adds a Desktop alias
+- App icon: a beer mug with an upgrade badge, drawn in `app/Icon/AppIcon.svg` and rendered
+  into `Assets.xcassets/AppIcon` by `app/Icon/make-icon.sh` (sips)
+
+#### Fixed
+- Runs started from the app, and the app's own `brew` calls, used a shorter PATH than the
+  LaunchAgent, so Brewfile backups from app runs left out VS Code extensions
+
+## [2.3.0] - 2026-10-25
+
+### Added
+- Clicking a notification opens that run in the Brew Updates app (`brewupdates://run/<RUN_ID>`)
+  when the app has recorded its location in `~/.brew_logs/.brew-updates-app`; otherwise it
+  still opens the log folder
+
+## [2.2.1] - 2026-10-25
+
+### Fixed
+- Runs failed with exit code 141 after the security scan when it found many vulnerabilities:
+  piping the report into `head` killed the upstream `grep` with SIGPIPE, and `pipefail` +
+  `set -e` aborted the run before cleanup. Scheduled runs had been failing this way
+  (38 times in `launchagent.log`). The report is now filtered with `awk`, which reads all input
+- A security scan that found no vulnerabilities would have failed the run (exit 1), because
+  `grep` exits 1 on no match under `pipefail`. The count now uses `awk` as well
+
+## [2.2.0] - 2026-10-25
+
+### UI Groundwork (Phase 0)
+
+Prepares the CLI to be driven by a SwiftUI app while keeping the scheduled LaunchAgent run
+as the source of truth.
+
+### Added
+- Machine-readable run summary `brew_update_<RUN_ID>.summary.json`, documented in `docs/run-summary-schema.md`
+- Run lock (`~/.brew_logs/.brew-updates.lock/`) so manual and scheduled runs never overlap; exit code `5` when a run is already in progress
+- `--packages LIST` to upgrade selected packages only
+- `--no-color` flag and `NO_COLOR` environment variable support
+- `--version` flag and `SCRIPT_VERSION`
+- `BREW_UPDATE_TRIGGER` env var; runs started by the LaunchAgent are recorded as `scheduled`
+- SIGINT/SIGTERM handling: cancelled runs release the lock and record `status: cancelled`
+- `scripts/setup.sh --reset-launchagent`
+
+### Changed
+- Upgrades use explicit package names. Pinned and excluded packages are reported as skipped
+- Upgrade results are confirmed by re-checking `brew outdated`, and logs show `name (old) → new`
+- All files from a run share one `RUN_ID`
+- `scripts/setup.sh` keeps an existing LaunchAgent plist, so the schedule survives re-deploys, and uses `launchctl bootout`/`bootstrap`
+- `SKIP_CASKS_BY_DEFAULT` and `CLEANUP_BY_DEFAULT` now take effect
+
+### Removed
+- Retired config keys `AUTO_UPGRADE`, `LOG_LEVEL` and `BACKUP_RETENTION_DAYS`, which never had any effect. They are ignored if present
+
+### Fixed
+- `EXCLUDED_FORMULAE` / `EXCLUDED_CASKS` were only hidden from the output. `brew upgrade` still upgraded the excluded packages
+- Exclusions matched by prefix (excluding `node` also hid `node@20`)
+- A failed `brew update` was treated as success: `run_with_retry` always returned 0 and never retried, and `main` exited 0
+- Partial upgrade failures were reported with exit code 0
+- `.security.json` reports were never deleted by log retention
+- Log cleanup ran before the config was loaded, so `LOG_RETENTION_DAYS` was ignored
+- Config values with quotes or inline comments (as in the example config) failed validation
+- `BREW_UPDATE_TIMEOUT` / `BREW_UPDATE_MAX_RETRIES` crashed the script (they reassigned readonly variables)
+- `scripts/setup.sh` reset the schedule to 3:00 AM on every deploy (the template path did not exist)
+
 ## [2.1.0] - 2024-11-08
 
 ### 🎉 Feature Release - Automation & Notifications

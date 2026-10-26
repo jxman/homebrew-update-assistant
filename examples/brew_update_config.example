@@ -2,17 +2,12 @@
 # Copy this file to ~/.brew_update_config and customize as needed
 
 # Backup and Log Settings
-BACKUP_RETENTION_DAYS=30
-MAX_BACKUP_COUNT=5
-LOG_RETENTION_DAYS=30
+MAX_BACKUP_COUNT=5      # Number of Brewfile backups to keep
+LOG_RETENTION_DAYS=30   # Delete per-run logs/reports/summaries older than this
 
-# Update Behavior
-AUTO_UPGRADE=false
-SKIP_CASKS_BY_DEFAULT=false
-CLEANUP_BY_DEFAULT=true
-
-# Logging
-LOG_LEVEL=INFO  # Options: DEBUG, INFO, WARNING, ERROR
+# Run Defaults
+SKIP_CASKS_BY_DEFAULT=false  # true = always skip casks (like --skip-casks)
+CLEANUP_BY_DEFAULT=true      # false = always skip cleanup (like --skip-cleanup)
 
 # Package Exclusions
 # Space-separated list of packages to exclude from updates
