@@ -99,6 +99,8 @@ struct MenuBarView: View {
 
         Divider()
 
+        // A Text in a menu is shown as a greyed-out, unclickable item
+        Text("Version \(AppVersion.current.description)")
         Button("Quit") {
             NSApp.terminate(nil)
         }

@@ -77,6 +77,20 @@ app; it asks you to quit the installed copy first. Keep using ⌘R in Xcode whil
 but don't leave both copies open: you'd get two menu bar icons, and notifications open
 whichever copy was launched last.
 
+**Versions.** The version is `MARKETING_VERSION` in `app/project.yml` (1.0.0). Bump it when
+you release something (1.1.0 for features, 1.0.1 for fixes), add a CHANGELOG entry, and tag
+the commit `app-v1.1.0`. The build number is set by `install-app.sh` to the git commit count,
+so the Dashboard's "1.0.0 (36)" tells you exactly which commit you're running. Builds run from
+Xcode say "development build" instead.
+
+**Signing.** `install-app.sh` signs with your free Apple Development certificate. The first
+time, macOS may ask whether codesign can use its key: choose **Always Allow**. A stable
+signature means macOS remembers permissions such as notifications across updates.
+
+**Another Mac.** `./scripts/install-app.sh --package` makes `dist/Brew-Updates-<version>-<build>.zip`
+without touching the installed copy. On the other Mac, unzip it into /Applications and
+right-click › **Open** the first time: it isn't notarized, so a plain double-click is blocked.
+
 ## Working in Xcode
 
 ### The window at a glance

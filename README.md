@@ -214,8 +214,10 @@ and tracks when each issue first appeared and when it was fixed.
 brew install xcodegen
 cd app && xcodegen generate && open BrewUpdates.xcodeproj   # then ⌘R
 
-# Or build a Release copy into /Applications with a Desktop alias (re-run after app changes)
+# Or build a signed Release copy into /Applications with a Desktop alias (re-run after app changes)
 ./scripts/install-app.sh
+# Or make a signed zip in dist/ for another Mac
+./scripts/install-app.sh --package
 ```
 
 See [app/GUIDE.md](app/GUIDE.md) for the Xcode workflow and a tour of the SwiftUI code.

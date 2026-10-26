@@ -157,6 +157,10 @@ struct DashboardView: View {
             // Grid aligns the labels and values into two columns
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
                 GridRow {
+                    Text("App").foregroundStyle(.secondary)
+                    Text(AppVersion.current.description)
+                }
+                GridRow {
                     Text("Homebrew").foregroundStyle(.secondary)
                     Text(model.homebrewVersion ?? "—")
                 }

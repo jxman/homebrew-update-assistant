@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [App 1.0.0] - 2026-10-26
+
+First versioned release of the SwiftUI app. App releases are tagged `app-vX.Y.Z`, separately
+from the script's own versions below.
+
 ### SwiftUI App
 
 #### Added
+- App version (1.0.0) on the Dashboard's System card, in the menu bar menu and in About.
+  `scripts/install-app.sh` sets the build number to the git commit count; Xcode builds show
+  "development build"
+- `scripts/install-app.sh` signs with the Apple Development certificate when there is one
+  (stable identity, so permissions survive updates), and `--package` makes a signed zip in `dist/`
 - Phase 1: native macOS menu bar + window app in `app/` with Dashboard, Installed packages,
   Runs & log viewer, and Security report views, reading `*.summary.json` and watching `~/.brew_logs`
 - Phase 2: run the deployed script from the app (Update All, Dry Run, upgrade selected packages)

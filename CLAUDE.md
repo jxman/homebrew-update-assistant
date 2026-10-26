@@ -110,7 +110,8 @@ shellcheck brew-updates.command
   ```
 - Lint: `swiftlint lint --strict` (config `app/.swiftlint.yml`), enforced by the pre-commit hook `hooks/swiftlint.sh`
 - Doctor screen: `DoctorReport` parses `*.doctor.log` text (`brew doctor --json` exists but is hidden from `--help`, so not relied on). `DoctorCheck` recognises warnings by headline fragments taken from Homebrew's `Library/Homebrew/diagnostic.rb`; add advice there plus a test when a new warning shows up. **Check Now** runs `brew doctor --verbose` (read-only) and keeps the result in memory only, never in `~/.brew_logs`. Fixes are copy-to-clipboard; the app does not run them
-- Installed copy: `scripts/install-app.sh` builds Release into `/Applications/Brew Updates.app` (+ Desktop alias). It refuses to run while that copy is open. Re-run it after app changes the user wants in their everyday copy
+- Installed copy: `scripts/install-app.sh` builds Release into `/Applications/Brew Updates.app` (+ Desktop alias), signed with the Apple Development certificate (ad hoc if there is none). It refuses to run while that copy is open. Re-run it after app changes the user wants in their everyday copy. `--package` makes a signed zip in `dist/` (gitignored) instead
+- App versions: `MARKETING_VERSION` in `app/project.yml`, bumped per release with a CHANGELOG `[App X.Y.Z]` entry and a git tag `app-vX.Y.Z` (separate from the script's version). `CURRENT_PROJECT_VERSION` stays 0 (= development build); install-app.sh passes the git commit count. Personal use only for now, so no Developer ID or notarization
 - App icon: edit `app/Icon/AppIcon.svg`, then run `app/Icon/make-icon.sh` (sips renders every size into `Assets.xcassets/AppIcon.appiconset`). Don't edit the PNGs directly
 - The user is learning SwiftUI and Xcode: explain new SwiftUI concepts briefly in code comments and keep `app/GUIDE.md` current
 
