@@ -8,10 +8,10 @@ enum BrewServiceError: LocalizedError {
     }
 }
 
-/// Read-only Homebrew queries.
+/// Homebrew queries, plus pin/unpin.
 ///
-/// Every command runs with `HOMEBREW_NO_AUTO_UPDATE=1` so that viewing the app never
-/// changes Homebrew's state; updating is left to the script.
+/// Every command runs with `HOMEBREW_NO_AUTO_UPDATE=1` so that brew never updates itself as
+/// a side effect; updating and upgrading are left to the script.
 struct BrewService: Sendable {
     static let candidatePaths = [
         "/opt/homebrew/bin/brew",
@@ -40,6 +40,11 @@ struct BrewService: Sendable {
     func version() async throws -> String {
         let result = try await run(["--version"])
         return result.stdoutText.split(separator: "\n").first.map(String.init) ?? ""
+    }
+
+    /// `brew pin` / `brew unpin`. Only formulae can be pinned.
+    func setPinned(_ pinned: Bool, formulae names: [String]) async throws {
+        _ = try await run([pinned ? "pin" : "unpin"] + names)
     }
 
     private func run(_ arguments: [String]) async throws -> ProcessResult {

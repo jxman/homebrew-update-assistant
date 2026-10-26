@@ -5,6 +5,19 @@ All notable changes to the Homebrew Update Assistant will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### SwiftUI App
+
+#### Added
+- Phase 1: native macOS menu bar + window app in `app/` with Dashboard, Installed packages,
+  Runs & log viewer, and Security report views, reading `*.summary.json` and watching `~/.brew_logs`
+- Phase 2: run the deployed script from the app (Update All, Dry Run, upgrade selected packages)
+  with live output, a Stop button that cancels cleanly, and a confirmation before any change
+- Phase 2: pin/unpin formulae and add/remove exclusions in `~/.brew_update_config` from the
+  Installed view (multi-select and right-click menu)
+- Quitting while an update is running asks first and stops the run cleanly
+
 ## [2.2.0] - 2026-10-25
 
 ### UI Groundwork (Phase 0)

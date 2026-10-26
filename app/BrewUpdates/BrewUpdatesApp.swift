@@ -4,8 +4,12 @@ import SwiftUI
 /// menu bar item, both sharing the same `AppModel`.
 @main
 struct BrewUpdatesApp: App {
-    /// `@State` makes SwiftUI create the model once and keep it alive for the app's lifetime.
-    @State private var model = AppModel()
+    /// Connects an AppKit `NSApplicationDelegate` for the few things SwiftUI has no API for,
+    /// here confirming Quit while an update is running. SwiftUI creates it once.
+    @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
+
+    /// The delegate owns the model so the scenes below and the quit handling share one instance.
+    private var model: AppModel { appDelegate.model }
 
     var body: some Scene {
         // `Window` (not `WindowGroup`) because there is only ever one main window
@@ -31,5 +35,30 @@ struct BrewUpdatesApp: App {
         } label: {
             MenuBarLabel(model: model)
         }
+    }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    let model = AppModel()
+
+    /// Quitting closes the script's output pipe, which would kill it mid-upgrade without a
+    /// summary. Ask first, then stop it cleanly and quit once it has exited.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard model.liveRun?.isActive == true else { return .terminateNow }
+
+        let alert = NSAlert()
+        alert.messageText = "An update is still running"
+        alert.informativeText = "Quitting stops it, like pressing Ctrl-C in Terminal. The run is recorded as cancelled."
+        alert.addButton(withTitle: "Stop and Quit")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
+
+        model.stopLiveRun()
+        Task {
+            await model.waitForLiveRun(timeout: .seconds(15))
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 }

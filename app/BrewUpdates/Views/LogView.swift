@@ -103,7 +103,8 @@ struct LogView: View {
     }
 }
 
-private struct LogLineRow: View {
+/// One log line: time, level tag and message. Also used for live run output.
+struct LogLineRow: View {
     let line: LogLine
 
     var body: some View {

@@ -16,7 +16,8 @@ struct InstalledView: View {
     // `@State` is view-local state: it survives re-renders but belongs to this screen only
     @State private var searchText = ""
     @State private var filter: Filter = .all
-    @State private var selection: InstalledPackage.ID?
+    /// A Set because the table allows selecting several rows (⌘-click, ⇧-click)
+    @State private var selection: Set<InstalledPackage.ID> = []
     @State private var sortOrder = [KeyPathComparator(\InstalledPackage.name, comparator: .localizedStandard)]
     @State private var showInspector = true
 
@@ -27,6 +28,10 @@ struct InstalledView: View {
             .filter { searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText)
                 || ($0.summary?.localizedCaseInsensitiveContains(searchText) ?? false) }
             .sorted(using: sortOrder)
+    }
+
+    private var selectedPackages: [InstalledPackage] {
+        model.installed.filter { selection.contains($0.id) }
     }
 
     var body: some View {
@@ -58,8 +63,18 @@ struct InstalledView: View {
             }
         }
         .inspector(isPresented: $showInspector) {
-            PackageDetailView(package: model.installed.first { $0.id == selection }, config: model.config)
+            inspector
                 .inspectorColumnWidth(min: 240, ideal: 280)
+        }
+    }
+
+    @ViewBuilder
+    private var inspector: some View {
+        let selected = selectedPackages
+        if selected.count > 1 {
+            MultiSelectionView(packages: selected)
+        } else {
+            PackageDetailView(package: selected.first, config: model.config)
         }
     }
 
@@ -84,6 +99,11 @@ struct InstalledView: View {
             TableColumn("Status") { package in
                 StatusPills(package: package, isExcluded: model.config.isExcluded(package))
             }
+        }
+        // Right-click menu. It receives the rows it applies to: the selection, or the clicked
+        // row when that isn't selected.
+        .contextMenu(forSelectionType: InstalledPackage.ID.self) { ids in
+            PackageActions(packages: model.installed.filter { ids.contains($0.id) })
         }
     }
 
@@ -134,6 +154,9 @@ private struct PackageDetailView: View {
                         LabeledContent("Installed on", value: date.formatted(date: .abbreviated, time: .omitted))
                     }
                 }
+                Section("Actions") {
+                    PackageActions(packages: [package])
+                }
                 Section("Source") {
                     LabeledContent("Type", value: package.kind.title)
                     if let tap = package.tap {
@@ -148,6 +171,70 @@ private struct PackageDetailView: View {
         } else {
             EmptyStateView(title: "No Selection", systemImage: "shippingbox", message: "Select a package to see details.")
         }
+    }
+}
+
+/// Inspector content when several packages are selected.
+private struct MultiSelectionView: View {
+    let packages: [InstalledPackage]
+
+    var body: some View {
+        Form {
+            Section {
+                Text("\(packages.count) packages selected").font(.title2.weight(.semibold))
+                Text(packages.map(\.name).joined(separator: ", "))
+                    .foregroundStyle(.secondary)
+            }
+            Section("Actions") {
+                PackageActions(packages: packages)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+/// Upgrade, pin and exclude for one or more packages. Used in the right-click menu (where
+/// each Button becomes a menu item) and in the inspector (where they are regular buttons).
+private struct PackageActions: View {
+    let packages: [InstalledPackage]
+    @Environment(AppModel.self) private var model
+
+    /// Pinned and excluded packages are skipped by the script, so they can't be upgraded here
+    private var upgradable: [InstalledPackage] {
+        packages.filter { $0.isOutdated && !$0.isPinned && !model.config.isExcluded($0) }
+    }
+
+    /// Only formulae can be pinned
+    private var formulae: [InstalledPackage] { packages.filter { $0.kind == .formula } }
+    private var allPinned: Bool { formulae.allSatisfy(\.isPinned) }
+    private var allExcluded: Bool { packages.allSatisfy(model.config.isExcluded) }
+
+    var body: some View {
+        Button {
+            model.request(.upgrade(packages: upgradable.map(\.name)))
+        } label: {
+            Label(upgradable.count > 1 ? "Upgrade \(upgradable.count) Packages…" : "Upgrade…", systemImage: "arrow.up.circle")
+        }
+        .disabled(upgradable.isEmpty || !model.canStartRun)
+
+        if !formulae.isEmpty {
+            Button {
+                Task { await model.setPinned(!allPinned, for: formulae) }
+            } label: {
+                Label(allPinned ? "Unpin" : "Pin", systemImage: allPinned ? "pin.slash" : "pin")
+            }
+            // brew pin and an upgrade shouldn't race each other
+            .disabled(model.isChangingPackages || model.isRunInProgress)
+            .help("Pinned formulae are never upgraded (brew pin)")
+        }
+
+        Button {
+            Task { await model.setExcluded(!allExcluded, for: packages) }
+        } label: {
+            Label(allExcluded ? "Include in Updates" : "Exclude from Updates", systemImage: allExcluded ? "checkmark.circle" : "nosign")
+        }
+        .disabled(model.isChangingPackages)
+        .help("Edits EXCLUDED_FORMULAE / EXCLUDED_CASKS in ~/.brew_update_config")
     }
 }
 

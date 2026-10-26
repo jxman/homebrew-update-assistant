@@ -84,7 +84,9 @@ enum ProcessRunner {
         let stderrBox = DataBox()
         let group = DispatchGroup()
         group.enter()
-        DispatchQueue.global(qos: .utility).async {
+        // Same priority as this thread, which waits for it: waiting on a lower-priority
+        // thread is a "priority inversion" (Xcode's Thread Performance Checker flags it)
+        DispatchQueue.global(qos: .userInitiated).async {
             stderrBox.data = stderrHandle.readDataToEndOfFile()
             group.leave()
         }

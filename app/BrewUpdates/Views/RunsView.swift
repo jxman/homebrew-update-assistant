@@ -2,10 +2,12 @@ import SwiftUI
 
 /// Run history on the left, the selected run's summary and logs on the right.
 struct RunsView: View {
-    /// What the left-hand list can select: a run, or the LaunchAgent's own output files
+    /// What the left-hand list can select: a run, the LaunchAgent's own output files, or the
+    /// live output of a run started from the app
     enum Item: Hashable {
         case run(Run.ID)
         case launchAgentOutput
+        case live
     }
 
     @Environment(AppModel.self) private var model
@@ -14,6 +16,11 @@ struct RunsView: View {
     var body: some View {
         HSplitView {
             List(selection: $selection) {
+                if let live = model.liveRun {
+                    Section("From This App") {
+                        LiveRunRow(run: live).tag(Item.live)
+                    }
+                }
                 Section("LaunchAgent") {
                     Label("Scheduler output", systemImage: "terminal")
                         .tag(Item.launchAgentOutput)
@@ -36,6 +43,15 @@ struct RunsView: View {
                     }
                 case .launchAgentOutput:
                     LaunchAgentOutputView(paths: model.paths)
+                case .live:
+                    if let live = model.liveRun {
+                        LiveRunView(run: live) { runID in
+                            model.selectedRunID = runID
+                            selection = .run(runID)
+                        }
+                    } else {
+                        EmptyStateView(title: "No run started", systemImage: "terminal")
+                    }
                 case nil:
                     EmptyStateView(title: "No Run Selected", systemImage: "clock.arrow.circlepath")
                 }
@@ -44,8 +60,20 @@ struct RunsView: View {
         }
         .navigationTitle("Runs")
         // Keep the list in sync when another screen (e.g. the dashboard) picks a run
-        .onAppear { syncSelectionFromModel() }
+        .onAppear {
+            if model.liveRun?.isActive == true {
+                selection = .live
+            } else {
+                syncSelectionFromModel()
+            }
+        }
         .onChange(of: model.selectedRunID) { syncSelectionFromModel() }
+        // A new run from the app: switch to its output
+        .onChange(of: model.liveRun?.id) {
+            if model.liveRun != nil {
+                selection = .live
+            }
+        }
         .onChange(of: selection) {
             if case .run(let id) = selection {
                 model.selectedRunID = id
@@ -54,8 +82,37 @@ struct RunsView: View {
     }
 
     private func syncSelectionFromModel() {
-        if let id = model.selectedRunID, selection != .launchAgentOutput {
+        if let id = model.selectedRunID, selection != .launchAgentOutput, selection != .live {
             selection = .run(id)
+        }
+    }
+}
+
+/// The list entry for the run started from the app.
+private struct LiveRunRow: View {
+    let run: LiveRun
+
+    var body: some View {
+        HStack {
+            if run.isActive {
+                ProgressView().controlSize(.small).frame(width: 18)
+            } else {
+                Image(systemName: run.action.systemImage).frame(width: 18)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(run.action.title)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var subtitle: String {
+        switch run.state {
+        case .starting, .running: "Live output · \(run.lines.count) lines"
+        case .stopping: "Stopping…"
+        case .finished(let outcome): outcome.message
+        case .failedToStart: "Couldn't start"
         }
     }
 }

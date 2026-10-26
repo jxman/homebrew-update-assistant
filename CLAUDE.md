@@ -10,7 +10,7 @@ This is the **Homebrew Update Assistant** - a production-ready bash script that 
 
 - **Single File Design**: `brew-updates.command` - Complete standalone bash script (~1,600 lines)
 - **Bash 3.2 Compatible**: The LaunchAgent runs it with macOS `/bin/bash` 3.2, so no associative arrays or `mapfile`, and guard empty array expansions under `set -u`
-- **UI Contract**: Each run writes `~/.brew_logs/brew_update_<RUN_ID>.summary.json` for the planned SwiftUI app. See [docs/run-summary-schema.md](docs/run-summary-schema.md); bump `SUMMARY_SCHEMA_VERSION` on breaking changes
+- **UI Contract**: Each run writes `~/.brew_logs/brew_update_<RUN_ID>.summary.json` for the SwiftUI app. See [docs/run-summary-schema.md](docs/run-summary-schema.md); bump `SUMMARY_SCHEMA_VERSION` on breaking changes
 - **Run Lock**: `~/.brew_logs/.brew-updates.lock/` prevents overlapping runs (exit code 5)
 - **Configuration System**: Optional `~/.brew_update_config` for user customization
 - **Logging & Backups**: Automatic file management in `~/.brew_logs/` and `~/.brew_backups/`
@@ -85,11 +85,13 @@ shellcheck brew-updates.command
 
 ## SwiftUI App (`app/`)
 
-- Native macOS app (menu bar + window), Swift 6, macOS 15+. **Read-only so far (phase 1)**; actions come in phase 2
+- Native macOS app (menu bar + window), Swift 6, macOS 15+. Phases 1–2 done (viewing, plus run/dry run/upgrade selected with live output, pin and exclude); phase 3 is schedule and settings editing
 - The Xcode project is **generated** by XcodeGen from `app/project.yml` and is gitignored. Run `cd app && xcodegen generate` after adding/removing files; never change settings in Xcode's project editor
 - Layout: `Models/` (pure parsing, no UI) → `Services/` (files, `brew`, `launchctl`) → `AppModel.swift` (`@Observable`, `@MainActor`) → `Views/`
 - The app must only ever invoke the **deployed** `~/bin/brew-updates.command`, read run data via `*.summary.json` (docs/run-summary-schema.md), and check `SystemStatus.minimumScriptVersion`
-- All `brew` calls set `HOMEBREW_NO_AUTO_UPDATE=1` so viewing the app never changes Homebrew state
+- All `brew` calls set `HOMEBREW_NO_AUTO_UPDATE=1`, so the only state changes are explicit user actions (pin/unpin). Updates and upgrades always go through the script (`ScriptRunner`, with `--yes --no-color` and `BREW_UPDATE_TRIGGER=app`)
+- Stopping a run sends SIGINT to the script and its children (like Ctrl-C), so it still writes a `cancelled` summary and releases the lock
+- Exclusions are written to `~/.brew_update_config` by `ConfigEditor`, which only rewrites the `EXCLUDED_*` line and keeps comments. Names must match the script's regex or it drops the whole list
 - Tests (Swift Testing) compile `Models/` and `Services/` directly into an unhosted test bundle. Hosted tests hang because a menu bar app never quits
 - Build/test from the terminal with the default DerivedData (`~/Library/Developer`). A `-derivedDataPath` inside `~/Documents` makes `xctest` block on a Documents permission prompt:
   ```bash

@@ -195,13 +195,14 @@ The Homebrew Update Assistant follows a modular, pipeline-based architecture wit
 
 A native macOS menu bar + window app in [`app/`](app/) sits on top of the script. The script and
 its 3 AM LaunchAgent stay the source of truth; the app reads their run summaries, logs and
-security reports, and shows installed packages from Homebrew.
+security reports, shows installed packages from Homebrew, and can start the deployed script
+itself (update, dry run, or selected packages) with live output.
 
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 0 | CLI contract: run summaries, run lock, `--packages`, `--no-color` | ✅ Done (v2.2.0) |
 | 1 | Read-only app: Dashboard, Installed, Runs & logs, Security, menu bar | ✅ Done |
-| 2 | Actions: run now / dry run with live output, upgrade selected, pin & exclude | Planned |
+| 2 | Actions: run now / dry run with live output, upgrade selected, pin & exclude | ✅ Done |
 | 3 | Edit schedule and settings | Planned |
 | 4 | Backup diff/restore, notification → app | Planned |
 

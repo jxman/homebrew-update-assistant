@@ -11,6 +11,7 @@ where it appears.
 - [Working in Xcode](#working-in-xcode)
 - [When to use Xcode vs. the terminal](#when-to-use-xcode-vs-the-terminal)
 - [SwiftUI concepts used in this app](#swiftui-concepts-used-in-this-app)
+- [Trying the actions safely](#trying-the-actions-safely)
 - [Things to try](#things-to-try)
 - [Troubleshooting](#troubleshooting)
 
@@ -20,20 +21,28 @@ where it appears.
 flowchart LR
     agent["LaunchAgent<br/>(3 AM)"] --> script["~/bin/brew-updates.command"]
     script --> logs["~/.brew_logs<br/>*.log, *.summary.json, *.security.json"]
-    subgraph app["Brew Updates app (read-only in phase 1)"]
-        services["Services/<br/>RunStore, BrewService, SystemStatus"] --> model["AppModel<br/>(shared state)"]
+    subgraph app["Brew Updates app"]
+        services["Services/<br/>RunStore, BrewService, SystemStatus,<br/>ScriptRunner, ConfigEditor"] --> model["AppModel + LiveRun<br/>(shared state)"]
         model --> views["Views/<br/>Dashboard, Installed, Runs, Security, menu bar"]
+        views -- "Update, Dry Run, Upgrade,<br/>Pin, Exclude" --> model
     end
     logs --> services
-    brew["brew info --json=v2"] --> services
-    plist["LaunchAgent plist<br/>+ ~/.brew_update_config"] --> services
+    brew["brew info / pin / unpin"] <--> services
+    plist["LaunchAgent plist<br/>+ ~/.brew_update_config"] <--> services
+    services -- "runs with --yes --no-color<br/>(live output)" --> script
 ```
+
+The app never upgrades anything itself: **Update All**, **Dry Run** and **Upgrade** all run the
+same deployed script the LaunchAgent uses, so every run gets the same backup, logs, summary
+and run lock. The only direct changes are `brew pin`/`unpin` and the exclusion lists in
+`~/.brew_update_config`.
 
 | Folder | What lives there | Has UI code? |
 |--------|------------------|--------------|
 | `BrewUpdates/Models/` | Plain data types and parsers (run summary, logs, schedule, grype report) | No |
 | `BrewUpdates/Services/` | Talking to the system: files, `brew`, `launchctl` | No |
-| `BrewUpdates/AppModel.swift` | The single shared state object the screens read | No (but drives the UI) |
+| `BrewUpdates/AppModel.swift` | The single shared state object the screens read, and the actions (run, stop, pin, exclude) | No (but drives the UI) |
+| `BrewUpdates/LiveRun.swift` | Output and state of a run started from the app | No |
 | `BrewUpdates/Views/` | SwiftUI screens and small components | Yes |
 | `BrewUpdatesTests/` | Unit tests for Models and Services | No |
 | `project.yml` | XcodeGen definition the Xcode project is generated from | — |
@@ -218,6 +227,79 @@ wrap any content, just like `VStack { … }`.
 - An `App` is made of **scenes**: here a `Window` and a `MenuBarExtra`
   (`BrewUpdatesApp.swift`). Both share one `AppModel`, so the menu bar and window always agree.
 
+### 13. Streaming results with `AsyncStream` and `for await`
+
+A run produces output for minutes, so `ScriptRunner.launch` can't just return a value at the
+end. Instead it returns an `AsyncStream<ScriptEvent>`: a sequence whose elements arrive over
+time. `AsyncStream.makeStream` gives a stream plus a *continuation*; the background reader
+calls `continuation.yield(.output(lines))` for each batch of lines it reads and `finish()`
+at the end. Lines are sent in batches, not one by one, because brew can print faster than
+the screen redraws. Updating the UI per line triggers Xcode's "onChange … tried to update
+multiple times per frame" warning. On the other
+side, `AppModel.start(_:)` loops with:
+
+```swift
+for await event in launched.events {   // suspends until the next line arrives
+    switch event { ... }
+}
+```
+
+The loop doesn't block the UI: while it waits, the main thread keeps drawing.
+
+### 14. A second `@Observable` object for fast-changing data
+
+`LiveRun` gets a new line many times a second. If those lines lived on `AppModel`, every view
+that reads anything from the model could re-render. A separate `LiveRun` object means only
+the views that read `run.lines` (the live output list) update per line.
+
+### 15. Confirmation dialogs and alerts driven by state
+
+Views don't "show" a dialog imperatively. `AppModel.pendingAction` holds the action waiting
+for confirmation, and `ContentView` attaches:
+
+```swift
+.confirmationDialog(title, isPresented: …, presenting: model.pendingAction) { action in
+    Button(action.title) { model.start(action) }
+    Button("Cancel", role: .cancel) {}
+}
+```
+
+Setting `pendingAction` from anywhere (the toolbar, the dashboard, the menu bar, the
+Installed right-click menu) shows the same dialog. `.alert(…, presenting: model.actionError)`
+works the same way for errors.
+
+### 16. Multiple selection and context menus
+
+`Table(rows, selection: $selection)` allows several selected rows when `selection` is a
+`Set<ID>` instead of an optional single ID (`InstalledView`). `.contextMenu(forSelectionType:)`
+builds the right-click menu from the rows it applies to. `PackageActions` is one view used in
+both the context menu (where each `Button` becomes a menu item) and the inspector (where they
+are regular buttons). SwiftUI adapts the same controls to where they're placed.
+
+### 17. Scrolling to the newest line
+
+`ScrollViewReader` gives a `proxy` that can scroll to any row by its `id`. `LiveRunView` calls
+`proxy.scrollTo(last.id, anchor: .bottom)` in `.onChange(of: run.lines.count)`, so the list
+follows the output unless **Follow output** is off. `Text(run.startedAt, style: .timer)` is a
+label that counts up by itself, with no timer code needed.
+
+### 18. Reaching AppKit when SwiftUI has no API
+
+SwiftUI has no hook for "the user chose Quit". `@NSApplicationDelegateAdaptor` in
+`BrewUpdatesApp.swift` plugs in a classic AppKit `AppDelegate`, whose
+`applicationShouldTerminate` asks before quitting during a run and returns `.terminateLater`
+until the script has stopped. The delegate owns `AppModel`, so the scenes and the quit
+handling share one instance.
+
+## Trying the actions safely
+
+- **Dry Run** (toolbar Update menu ▾, or the menu bar) changes nothing and shows the live output.
+  Try **Stop** partway through. The run appears in the list as *Cancelled*.
+- **Exclude from Updates** edits `~/.brew_update_config`; **Include** puts it back. Open the
+  file to watch the `EXCLUDED_FORMULAE=` line change while your comments stay.
+- **Pin**/**Unpin** run `brew pin`/`brew unpin`; check with `brew list --pinned`.
+- **Update All…** and **Upgrade…** always ask first, and run exactly what the 3 AM job runs.
+
 ## Things to try
 
 Small, safe changes for practice. Use previews (⌥⌘↩) to see the result immediately.
@@ -232,6 +314,11 @@ Small, safe changes for practice. Use previews (⌥⌘↩) to see the result imm
    `.partial` yellow.
 5. **Write a test.** Add a case to `ScheduleTests` for a monthly schedule
    (`<key>Day</key><integer>1</integer>`) and run ⌘U.
+6. **Add a run option.** Add `case updateFormulaeOnly` to `ScriptAction` that passes
+   `--skip-casks`, fill in the `switch` statements the compiler flags, and add it to the
+   toolbar menu in `ContentView.RunControl`.
+7. **Colour the live output.** In `LogLineRow` (`LogView.swift`), give `.output` lines that
+   start with `==>` (brew's headings) a bold font.
 
 ## Troubleshooting
 
@@ -240,6 +327,9 @@ Small, safe changes for practice. Use previews (⌥⌘↩) to see the result imm
 | New file doesn't appear in Xcode / "cannot find X in scope" | `cd app && xcodegen generate` |
 | macOS asks whether `xctest` or Xcode may access Documents | The repo is in `~/Documents`. Allow it for Xcode. Command-line builds use the default DerivedData in `~/Library` to avoid this |
 | Orange banner "Deployed script is v…" | Run `./scripts/setup.sh` from the repo root to deploy the current script |
+| Issue navigator shows "Update to recommended settings" | Usually after an Xcode upgrade. **Don't click Perform Changes** (the next `xcodegen generate` undoes it). Note the pre-checked settings, add them to `settings.base` in `project.yml`, set `options.xcodeVersion` to the new Xcode version, and regenerate |
+| Update / Dry Run greyed out | A run is already in progress (scheduled or from Terminal), or the deployed script is older than the app needs (see the orange banner) |
+| Run ends at once with "Another update is already running" | Exit code 5: another run holds `~/.brew_logs/.brew-updates.lock`. Wait for it, or check the Runs list |
 | Preview shows an error or stops updating | ⌥⌘P to refresh; ⌘⇧K then ⌘B if it persists |
 | Build fails after pulling changes | `xcodegen generate`, then ⌘⇧K and build again |
 | "Untrusted developer" / signing prompts | The app is ad-hoc signed for local use (`CODE_SIGN_IDENTITY: "-"` in `project.yml`); building it yourself avoids Gatekeeper prompts |

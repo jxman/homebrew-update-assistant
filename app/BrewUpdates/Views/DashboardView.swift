@@ -82,10 +82,17 @@ struct DashboardView: View {
                 Text(outdated.isEmpty ? "Everything is up to date" : outdated.prefix(4).map(\.name).joined(separator: ", "))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-                Button("Show packages") {
-                    model.selectedSection = .installed
+                HStack {
+                    Button("Show packages") {
+                        model.selectedSection = .installed
+                    }
+                    .buttonStyle(.link)
+                    if !outdated.isEmpty {
+                        Spacer()
+                        Button("Update All…") { model.request(.update) }
+                            .disabled(!model.canStartRun)
+                    }
                 }
-                .buttonStyle(.link)
             }
         }
     }

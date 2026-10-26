@@ -27,11 +27,7 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItem {
-                if model.isRunInProgress {
-                    Label("Update running", systemImage: "arrow.triangle.2.circlepath")
-                        .labelStyle(.titleAndIcon)
-                        .foregroundStyle(.blue)
-                }
+                RunControl()
             }
             ToolbarItem {
                 Button {
@@ -44,6 +40,48 @@ struct ContentView: View {
         }
         // `.task` runs async work when the view appears and cancels it if the view goes away
         .task { await model.start() }
+        // `presenting:` hands the pending action to the dialog's buttons and message. Setting
+        // `isPresented` to false (any button does this) clears it again.
+        .confirmationDialog(
+            model.pendingAction?.title ?? "",
+            isPresented: Binding(
+                get: { model.pendingAction != nil },
+                set: { if !$0 { model.pendingAction = nil } }
+            ),
+            presenting: model.pendingAction
+        ) { action in
+            Button(action.title) { model.start(action) }
+            Button("Cancel", role: .cancel) {}
+        } message: { action in
+            Text(confirmationMessage(for: action))
+        }
+        .alert(
+            "Couldn't change packages",
+            isPresented: Binding(
+                get: { model.actionError != nil },
+                set: { if !$0 { model.actionError = nil } }
+            ),
+            presenting: model.actionError
+        ) { _ in
+            Button("OK") {}
+        } message: { error in
+            Text(error)
+        }
+    }
+
+    private func confirmationMessage(for action: ScriptAction) -> String {
+        let steps = "The run also backs up your Brewfile and runs brew doctor, the security scan and cleanup, "
+            + "just like the scheduled run."
+        switch action {
+        case .update:
+            let count = model.outdatedPackages.filter { !$0.isPinned && !model.config.isExcluded($0) }.count
+            return "Updates Homebrew and upgrades all outdated packages (\(count) right now), "
+                + "skipping pinned and excluded ones. " + steps
+        case .upgrade(let packages):
+            return "Updates Homebrew and upgrades \(packages.joined(separator: ", ")). " + steps
+        case .dryRun:
+            return "Shows what would be upgraded without changing anything."
+        }
     }
 
     /// `@ViewBuilder` lets a function return different view types from a switch
@@ -59,6 +97,39 @@ struct ContentView: View {
 
     private func badgeCount(for section: AppModel.Section) -> Int {
         section == .installed ? model.outdatedPackages.count : 0
+    }
+}
+
+/// Toolbar control: Update (with Dry Run in its menu) or Stop while the app's run is active.
+private struct RunControl: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if let live = model.liveRun, live.isActive {
+            Button {
+                model.stopLiveRun()
+            } label: {
+                Label("Stop", systemImage: "stop.fill")
+            }
+            .help("Stop the running update")
+        } else if model.isRunInProgress {
+            // Started elsewhere (the LaunchAgent or Terminal); the app can only watch it
+            Label("Update running", systemImage: "arrow.triangle.2.circlepath")
+                .labelStyle(.titleAndIcon)
+                .foregroundStyle(.blue)
+        } else {
+            // A Menu with `primaryAction`: clicking runs the update, the arrow opens the menu
+            Menu {
+                Button("Update All…") { model.request(.update) }
+                Button("Dry Run") { model.request(.dryRun) }
+            } label: {
+                Label("Update", systemImage: "arrow.down.circle")
+            } primaryAction: {
+                model.request(.update)
+            }
+            .disabled(!model.canStartRun)
+            .help("Run brew-updates now (menu: dry run)")
+        }
     }
 }
 

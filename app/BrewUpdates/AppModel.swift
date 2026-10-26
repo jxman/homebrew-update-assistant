@@ -51,10 +51,22 @@ final class AppModel {
     private(set) var availableDiskSpace: Int64?
     private(set) var lastRefreshed: Date?
 
+    // MARK: Actions
+
+    /// The run started from the app, kept after it finishes so its output stays viewable
+    private(set) var liveRun: LiveRun?
+    /// A run waiting for the user to confirm it; `ContentView` shows the dialog
+    var pendingAction: ScriptAction?
+    /// Shown as an alert when a pin or exclusion change fails
+    var actionError: String?
+    /// True while a pin/unpin or exclusion change is being written
+    private(set) var isChangingPackages = false
+
     let paths: AppPaths
     private let brew = BrewService()
     private let watcher = DirectoryWatcher()
     private var runsReloadTask: Task<Void, Never>?
+    private var liveRunTask: Task<Void, Never>?
     private var hasStarted = false
 
     init(paths: AppPaths = .current) {
@@ -66,7 +78,9 @@ final class AppModel {
     var latestRun: Run? { runs.first }
     var latestSummarizedRun: Run? { runs.first { $0.summary != nil } }
     var outdatedPackages: [InstalledPackage] { installed.filter(\.isOutdated) }
-    var isRunInProgress: Bool { runningPID != nil }
+    /// A run holds the script's lock (scheduled or from the app), or the app is starting one
+    var isRunInProgress: Bool { runningPID != nil || liveRun?.isActive == true }
+    var canStartRun: Bool { !isRunInProgress && !isScriptOutdated }
     var nextScheduledRun: Date? { isLaunchAgentLoaded == false ? nil : schedule?.nextRun(after: .now) }
 
     var isScriptOutdated: Bool {
@@ -152,6 +166,90 @@ final class AppModel {
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
             await reloadRuns()
+        }
+    }
+}
+
+// MARK: - Actions
+
+extension AppModel {
+    /// Starts a dry run straight away; anything that changes the system asks first.
+    func request(_ action: ScriptAction) {
+        if action.changesSystem {
+            pendingAction = action
+        } else {
+            start(action)
+        }
+    }
+
+    /// Runs the deployed script and collects its output into `liveRun`.
+    func start(_ action: ScriptAction) {
+        guard canStartRun else { return }
+        let run = LiveRun(action: action)
+        liveRun = run
+        selectedSection = .runs
+        let runner = ScriptRunner(paths: paths, brewExecutable: brew.executable)
+
+        liveRunTask = Task {
+            do {
+                let launched = try await runner.launch(action)
+                run.state = .running(pid: launched.pid)
+                // `for await` receives each event as the script produces it, and ends when the
+                // stream finishes after the exit code
+                for await event in launched.events {
+                    switch event {
+                    case .output(let lines):
+                        run.append(lines)
+                    case .exited(let code):
+                        run.state = .finished(ScriptOutcome(exitCode: code))
+                    }
+                }
+            } catch {
+                run.state = .failedToStart(error.localizedDescription)
+            }
+            // Packages and runs have changed; reload them and find this run's files
+            await refresh()
+            run.runID = runs.first { $0.date >= run.startedAt.addingTimeInterval(-2) }?.id
+        }
+    }
+
+    func stopLiveRun() {
+        guard let run = liveRun, case .running(let pid) = run.state else { return }
+        run.state = .stopping
+        ScriptRunner.interrupt(pid: pid)
+    }
+
+    /// Waits until the live run has exited, or the timeout passes.
+    func waitForLiveRun(timeout: Duration) async {
+        let deadline = ContinuousClock.now + timeout
+        while liveRun?.isActive == true, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
+    func setPinned(_ pinned: Bool, for packages: [InstalledPackage]) async {
+        let names = packages.filter { $0.kind == .formula && $0.isPinned != pinned }.map(\.name)
+        guard !names.isEmpty else { return }
+        await changePackages {
+            try await brew.setPinned(pinned, formulae: names)
+        }
+        await loadInstalled()
+    }
+
+    func setExcluded(_ excluded: Bool, for packages: [InstalledPackage]) async {
+        let editor = ConfigEditor(paths: paths)
+        await changePackages {
+            config = try await editor.setExcluded(excluded, for: packages)
+        }
+    }
+
+    private func changePackages(_ change: () async throws -> Void) async {
+        isChangingPackages = true
+        defer { isChangingPackages = false }
+        do {
+            try await change()
+        } catch {
+            actionError = error.localizedDescription
         }
     }
 }

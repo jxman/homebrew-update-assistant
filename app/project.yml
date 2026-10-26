@@ -9,6 +9,10 @@ options:
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
+  # Marks the project as reviewed by this Xcode, so it doesn't show "Update to recommended
+  # settings". When Xcode is upgraded and shows it again, add the settings it recommends
+  # below and bump this, rather than clicking "Perform Changes" (regeneration would undo it).
+  xcodeVersion: "27.1"
 
 settings:
   base:
@@ -20,6 +24,8 @@ settings:
     DEVELOPMENT_TEAM: ""
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     DEAD_CODE_STRIPPING: YES
+    # Recommended by Xcode 27; only matters once the app has String Catalogs
+    STRING_CATALOG_GENERATE_SYMBOLS: YES
 
 targets:
   BrewUpdates:
