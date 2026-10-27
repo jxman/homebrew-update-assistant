@@ -10,8 +10,9 @@ enum CaskAppStatus: Hashable, Sendable {
     case notChecked
     /// None of the cask's apps exist any more
     case missing
-    /// The version from the app's Info.plist, if it has one
-    case found(version: String?)
+    /// The version from the app's Info.plist, if it has one, and when that file last
+    /// changed: for a self-updating app, when it last updated itself
+    case found(version: String?, modified: Date? = nil)
 }
 
 extension DoctorIssue {
@@ -106,7 +107,11 @@ enum CaskApp {
     /// True when the app's own version is older than the cask's latest. Cask versions often
     /// add a build number after a comma (`2.2.5,21124`); apps report just `2.2.5`.
     static func isBehind(appVersion: String, latest: String) -> Bool {
-        let latestVersion = latest.split(separator: ",").first.map(String.init) ?? latest
-        return appVersion.compare(latestVersion, options: .numeric) == .orderedAscending
+        appVersion.compare(shortVersion(latest), options: .numeric) == .orderedAscending
+    }
+
+    /// A cask version without its build number: `2.2.5,21124` → `2.2.5`
+    static func shortVersion(_ version: String) -> String {
+        version.split(separator: ",").first.map(String.init) ?? version
     }
 }

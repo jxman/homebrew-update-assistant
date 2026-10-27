@@ -107,18 +107,18 @@ struct InstalledView: View {
                         ? "" : "Homebrew's record says \(package.installedVersion); the app has updated itself since")
             }
             TableColumn("Latest", value: \.latestVersion) { package in
-                Text(package.latestVersion)
+                Text(package.displayedLatestVersion)
                     .monospacedDigit()
                     .foregroundStyle(package.isOutdated || package.isSelfUpdateBehind ? .orange : .secondary)
+                    .help(package.displayedLatestVersion == package.latestVersion
+                        ? "" : "Homebrew's full version: \(package.latestVersion)")
             }
             TableColumn("Date Installed", value: \.installedSortDate) { package in
-                if let date = package.installedDate {
+                if let date = package.displayedInstalledDate {
                     Text(date.formatted(date: .abbreviated, time: .shortened))
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
-                        .help(package.kind == .formula
-                            ? "When this version was installed; upgrading resets it"
-                            : "When this cask was installed")
+                        .help(Self.dateHelp(for: package))
                 } else {
                     Text("—").foregroundStyle(.secondary)
                 }
@@ -148,6 +148,17 @@ struct InstalledView: View {
         case .topLevel: package.installedOnRequest
         case .casks: package.kind == .cask
         }
+    }
+
+    /// Tooltip for the Date Installed column: what the date means for this kind of package
+    private static func dateHelp(for package: InstalledPackage) -> String {
+        if package.hasSelfUpdatedDate {
+            let record = package.installedDate?.formatted(date: .abbreviated, time: .shortened) ?? "no date"
+            return "When the app last updated itself; Homebrew's record says \(record)"
+        }
+        return package.kind == .formula
+            ? "When this version was installed; upgrading resets it"
+            : "When this cask was installed"
     }
 }
 
@@ -197,7 +208,12 @@ private struct PackageDetailView: View {
                         LabeledContent("Homebrew's record", value: package.installedVersion)
                     }
                     LabeledContent("Latest", value: package.latestVersion)
-                    if let date = package.installedDate {
+                    if package.hasSelfUpdatedDate, let updated = package.displayedInstalledDate {
+                        LabeledContent("Updated itself on", value: updated.formatted(date: .abbreviated, time: .shortened))
+                        if let date = package.installedDate {
+                            LabeledContent("Homebrew's record", value: date.formatted(date: .abbreviated, time: .shortened))
+                        }
+                    } else if let date = package.installedDate {
                         LabeledContent(package.kind == .formula ? "This version installed" : "Installed on",
                                        value: date.formatted(date: .abbreviated, time: .shortened))
                     }
