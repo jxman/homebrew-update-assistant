@@ -21,7 +21,7 @@ struct CaskAppLocator: Sendable {
             FileManager.default.fileExists(atPath: $0.path)
         }
         guard let app = existing else { return .missing }
-        return .found(version: version(of: app))
+        return .found(version: version(of: app), modified: modificationDate(of: app))
     }
 
     private func locations(of candidate: String) -> [URL] {
@@ -50,6 +50,13 @@ struct CaskAppLocator: Sendable {
             return nil
         }
         return (info["CFBundleShortVersionString"] ?? info["CFBundleVersion"]) as? String
+    }
+
+    /// Info.plist rather than the .app folder: an updater replaces the plist with the new
+    /// version, while the folder's date can change for other reasons
+    private func modificationDate(of app: URL) -> Date? {
+        let plist = app.appending(path: "Contents/Info.plist")
+        return try? plist.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
 
     private struct Receipt: Decodable {

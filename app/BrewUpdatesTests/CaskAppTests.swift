@@ -40,11 +40,13 @@ struct CaskAppTests {
         let applications = root.appending(path: "Applications")
         let caskroom = root.appending(path: "Caskroom")
 
-        // OrbStack.app 2.2.5 is installed
+        // OrbStack.app 2.2.5 is installed, and updated itself on Oct 23
         let orbstack = applications.appending(path: "OrbStack.app/Contents")
         try FileManager.default.createDirectory(at: orbstack, withIntermediateDirectories: true)
         let plist = try PropertyListSerialization.data(fromPropertyList: ["CFBundleShortVersionString": "2.2.5"], format: .xml, options: 0)
         try plist.write(to: orbstack.appending(path: "Info.plist"))
+        let updated = Date(timeIntervalSince1970: 1_792_766_457)
+        try FileManager.default.setAttributes([.modificationDate: updated], ofItemAtPath: orbstack.appending(path: "Info.plist").path)
 
         // kiro-cli's receipt says it was installed as "Amazon Q.app", which also isn't there
         let metadata = caskroom.appending(path: "kiro-cli/.metadata")
@@ -53,7 +55,7 @@ struct CaskAppTests {
             .write(to: metadata.appending(path: "INSTALL_RECEIPT.json"))
 
         let locator = CaskAppLocator(caskroom: caskroom, applicationDirectories: [applications])
-        #expect(locator.status(for: cask("orbstack", apps: ["OrbStack.app"])) == .found(version: "2.2.5"))
+        #expect(locator.status(for: cask("orbstack", apps: ["OrbStack.app"])) == .found(version: "2.2.5", modified: updated))
         #expect(locator.status(for: cask("kiro-cli", apps: ["Kiro CLI.app"])) == .missing)
         #expect(locator.status(for: cask("grype", apps: [])) == .notChecked)
 
@@ -132,6 +134,27 @@ struct CaskAppTests {
         #expect(!UninstallPlan(packages: [kiro], installed: [kiro]).message.contains("password"))
     }
 
+    @Test func showsWhenASelfUpdatingAppLastUpdated() {
+        let installed = Date(timeIntervalSince1970: 1_757_362_500)
+        let updated = Date(timeIntervalSince1970: 1_792_766_457)
+        var orbstack = cask("orbstack", apps: ["OrbStack.app"], autoUpdates: true, installedDate: installed)
+        orbstack.appStatus = .found(version: "2.2.5", modified: updated)
+        #expect(orbstack.displayedInstalledDate == updated)
+        #expect(orbstack.hasSelfUpdatedDate)
+        #expect(orbstack.installedSortDate == updated)
+
+        // Casks that don't update themselves keep brew's date
+        var other = cask("tflint", apps: ["Tflint.app"], installedDate: installed)
+        other.appStatus = .found(version: "0.65.0", modified: updated)
+        #expect(other.displayedInstalledDate == installed)
+        #expect(!other.hasSelfUpdatedDate)
+    }
+
+    @Test func dropsTheBuildNumberFromCaskLatestVersions() {
+        #expect(cask("orbstack", apps: []).displayedLatestVersion == "2.2.5")
+        #expect(CaskApp.shortVersion("0.65.0") == "0.65.0")
+    }
+
     @Test func showsTheAppsOwnVersionForSelfUpdatingCasks() {
         var orbstack = cask("orbstack", apps: ["OrbStack.app"], autoUpdates: true)
         orbstack.appStatus = .found(version: "2.2.5")
@@ -144,11 +167,11 @@ struct CaskAppTests {
         #expect(!orbstack.isOutdated)
     }
 
-    private func cask(_ name: String, apps: [String], autoUpdates: Bool = false) -> InstalledPackage {
+    private func cask(_ name: String, apps: [String], autoUpdates: Bool = false, installedDate: Date? = nil) -> InstalledPackage {
         InstalledPackage(
             name: name, fullName: name, kind: .cask, summary: nil, homepage: nil, tap: nil,
             installedVersion: "2.0.1,19784", latestVersion: "2.2.5,21124", isOutdated: false, isPinned: false,
-            installedOnRequest: true, installedDate: nil, autoUpdates: autoUpdates, appCandidates: apps
+            installedOnRequest: true, installedDate: installedDate, autoUpdates: autoUpdates, appCandidates: apps
         )
     }
 }

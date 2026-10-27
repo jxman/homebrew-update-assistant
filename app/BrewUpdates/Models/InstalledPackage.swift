@@ -23,6 +23,8 @@ struct InstalledPackage: Identifiable, Sendable, Hashable {
     let isPinned: Bool
     /// False for formulae installed only as dependencies of something else
     let installedOnRequest: Bool
+    /// When the current version was put in place: an upgrade resets it for formulae;
+    /// for casks it's when the cask was first installed
     let installedDate: Date?
     /// Casks that update themselves; `brew outdated` skips these by default
     let autoUpdates: Bool
@@ -42,17 +44,52 @@ struct InstalledPackage: Identifiable, Sendable, Hashable {
 
     /// The version actually on disk for casks that update themselves; otherwise brew's record
     var displayedVersion: String {
-        if autoUpdates, case .found(let version?) = appStatus {
+        if autoUpdates, case .found(let version?, _) = appStatus {
             return version
         }
         return installedVersion
     }
 
+    /// When a self-updating cask's app last updated itself (brew's date is from the
+    /// original install and never moves); otherwise brew's `installedDate`
+    var displayedInstalledDate: Date? {
+        if autoUpdates, case .found(_, let modified?) = appStatus {
+            return modified
+        }
+        return installedDate
+    }
+
+    /// The date shown differs from brew's record because the app updated itself
+    var hasSelfUpdatedDate: Bool {
+        displayedInstalledDate != installedDate
+    }
+
+    /// `displayedInstalledDate` for sorting; `Date?` isn't Comparable, so unknown dates sort as oldest
+    var installedSortDate: Date { displayedInstalledDate ?? .distantPast }
+
+    /// The latest version without a cask's build number, so it lines up with the installed one
+    var displayedLatestVersion: String {
+        kind == .cask ? CaskApp.shortVersion(latestVersion) : latestVersion
+    }
+
     /// A self-updating app that hasn't caught up with the latest version yet. The script
     /// can't upgrade these (brew skips them), so they aren't counted as outdated.
     var isSelfUpdateBehind: Bool {
-        guard autoUpdates, case .found(let version?) = appStatus else { return false }
+        guard autoUpdates, case .found(let version?, _) = appStatus else { return false }
         return CaskApp.isBehind(appVersion: version, latest: latestVersion)
+    }
+
+    /// For each formula, the names of installed formulae that declare it as a direct
+    /// dependency, keyed by full name (how `brew info` records dependencies). One pass over
+    /// the list, so the table can look it up per row cheaply.
+    static func dependents(in installed: [InstalledPackage]) -> [String: [String]] {
+        var result: [String: [String]] = [:]
+        for package in installed {
+            for dependency in package.directDependencies {
+                result[dependency, default: []].append(package.name)
+            }
+        }
+        return result.mapValues { $0.sorted { $0.localizedStandardCompare($1) == .orderedAscending } }
     }
 
     /// Decodes the `brew info --json=v2` document into a single sorted list.

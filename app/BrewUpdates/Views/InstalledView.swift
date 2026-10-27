@@ -5,7 +5,7 @@ struct InstalledView: View {
     enum Filter: String, CaseIterable, Identifiable {
         case all = "All"
         case outdated = "Outdated"
-        case topLevel = "Top-level"
+        case requested = "Requested"
         case casks = "Casks"
 
         var id: String { rawValue }
@@ -20,6 +20,8 @@ struct InstalledView: View {
     @State private var selection: Set<InstalledPackage.ID> = []
     @State private var sortOrder = [KeyPathComparator(\InstalledPackage.name, comparator: .localizedStandard)]
     @State private var showInspector = true
+    /// Who needs each formula, rebuilt only when the package list changes (not on every render)
+    @State private var dependents: [String: [String]] = [:]
 
     /// Recomputed on every render from the source data, so it can never get out of sync
     private var rows: [InstalledPackage] {
@@ -53,6 +55,7 @@ struct InstalledView: View {
                     ForEach(Filter.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .help("Requested: packages you installed yourself, not ones pulled in as dependencies")
             }
             ToolbarItem {
                 Button {
@@ -61,6 +64,9 @@ struct InstalledView: View {
                     Label("Details", systemImage: "sidebar.right")
                 }
             }
+        }
+        .onChange(of: model.installed, initial: true) {
+            dependents = InstalledPackage.dependents(in: model.installed)
         }
         .inspector(isPresented: $showInspector) {
             inspector
@@ -107,12 +113,26 @@ struct InstalledView: View {
                         ? "" : "Homebrew's record says \(package.installedVersion); the app has updated itself since")
             }
             TableColumn("Latest", value: \.latestVersion) { package in
-                Text(package.latestVersion)
+                Text(package.displayedLatestVersion)
                     .monospacedDigit()
                     .foregroundStyle(package.isOutdated || package.isSelfUpdateBehind ? .orange : .secondary)
+                    .help(package.displayedLatestVersion == package.latestVersion
+                        ? "" : "Homebrew's full version: \(package.latestVersion)")
             }
+            TableColumn("Date Installed", value: \.installedSortDate) { package in
+                if let date = package.displayedInstalledDate {
+                    Text(date.formatted(date: .abbreviated, time: .shortened))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .help(Self.dateHelp(for: package))
+                } else {
+                    Text("—").foregroundStyle(.secondary)
+                }
+            }
+            .width(min: 130, ideal: 150)
             TableColumn("Status") { package in
-                StatusPills(package: package, isExcluded: model.config.isExcluded(package))
+                StatusPills(package: package, isExcluded: model.config.isExcluded(package),
+                            neededBy: dependents[package.fullName] ?? [])
             }
         }
         // Right-click menu. It receives the rows it applies to: the selection, or the clicked
@@ -132,15 +152,28 @@ struct InstalledView: View {
         switch filter {
         case .all: true
         case .outdated: package.isOutdated
-        case .topLevel: package.installedOnRequest
+        case .requested: package.installedOnRequest
         case .casks: package.kind == .cask
         }
+    }
+
+    /// Tooltip for the Date Installed column: what the date means for this kind of package
+    private static func dateHelp(for package: InstalledPackage) -> String {
+        if package.hasSelfUpdatedDate {
+            let record = package.installedDate?.formatted(date: .abbreviated, time: .shortened) ?? "no date"
+            return "When the app last updated itself; Homebrew's record says \(record)"
+        }
+        return package.kind == .formula
+            ? "When this version was installed; upgrading resets it"
+            : "When this cask was installed"
     }
 }
 
 private struct StatusPills: View {
     let package: InstalledPackage
     let isExcluded: Bool
+    /// Installed formulae that depend on this one directly
+    var neededBy: [String] = []
 
     var body: some View {
         HStack(spacing: 4) {
@@ -156,6 +189,11 @@ private struct StatusPills: View {
             if package.isPinned { Pill(text: "Pinned", color: .purple) }
             if isExcluded { Pill(text: "Excluded", color: .red) }
             if !package.installedOnRequest { Pill(text: "Dependency") }
+            // Requested, but something else needs it too, so removing it would break that
+            if package.installedOnRequest, !neededBy.isEmpty {
+                Pill(text: neededBy.count == 1 ? "Needed by \(neededBy[0])" : "Needed by \(neededBy.count) packages")
+                    .help("You installed this, and \(neededBy.joined(separator: ", ")) also needs it")
+            }
             if package.autoUpdates { Pill(text: "Auto-updates", color: .blue) }
         }
     }
@@ -176,7 +214,8 @@ private struct PackageDetailView: View {
                     if let summary = package.summary {
                         Text(summary).foregroundStyle(.secondary)
                     }
-                    StatusPills(package: package, isExcluded: config.isExcluded(package))
+                    StatusPills(package: package, isExcluded: config.isExcluded(package),
+                                neededBy: InstalledPackage.dependents(in: installed)[package.fullName] ?? [])
                 }
                 Section("Versions") {
                     LabeledContent("Installed", value: package.isAppMissing ? "Not on disk" : package.displayedVersion)
@@ -184,8 +223,14 @@ private struct PackageDetailView: View {
                         LabeledContent("Homebrew's record", value: package.installedVersion)
                     }
                     LabeledContent("Latest", value: package.latestVersion)
-                    if let date = package.installedDate {
-                        LabeledContent("Installed on", value: date.formatted(date: .abbreviated, time: .omitted))
+                    if package.hasSelfUpdatedDate, let updated = package.displayedInstalledDate {
+                        LabeledContent("Updated itself on", value: updated.formatted(date: .abbreviated, time: .shortened))
+                        if let date = package.installedDate {
+                            LabeledContent("Homebrew's record", value: date.formatted(date: .abbreviated, time: .shortened))
+                        }
+                    } else if let date = package.installedDate {
+                        LabeledContent(package.kind == .formula ? "This version installed" : "Installed on",
+                                       value: date.formatted(date: .abbreviated, time: .shortened))
                     }
                 }
                 if let note = appNote(for: package) {
