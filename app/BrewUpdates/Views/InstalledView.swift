@@ -111,6 +111,19 @@ struct InstalledView: View {
                     .monospacedDigit()
                     .foregroundStyle(package.isOutdated || package.isSelfUpdateBehind ? .orange : .secondary)
             }
+            TableColumn("Date Installed", value: \.installedSortDate) { package in
+                if let date = package.installedDate {
+                    Text(date.formatted(date: .abbreviated, time: .shortened))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .help(package.kind == .formula
+                            ? "When this version was installed; upgrading resets it"
+                            : "When this cask was installed")
+                } else {
+                    Text("—").foregroundStyle(.secondary)
+                }
+            }
+            .width(min: 130, ideal: 150)
             TableColumn("Status") { package in
                 StatusPills(package: package, isExcluded: model.config.isExcluded(package))
             }
@@ -185,7 +198,8 @@ private struct PackageDetailView: View {
                     }
                     LabeledContent("Latest", value: package.latestVersion)
                     if let date = package.installedDate {
-                        LabeledContent("Installed on", value: date.formatted(date: .abbreviated, time: .omitted))
+                        LabeledContent(package.kind == .formula ? "This version installed" : "Installed on",
+                                       value: date.formatted(date: .abbreviated, time: .shortened))
                     }
                 }
                 if let note = appNote(for: package) {

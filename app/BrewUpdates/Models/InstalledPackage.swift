@@ -23,6 +23,8 @@ struct InstalledPackage: Identifiable, Sendable, Hashable {
     let isPinned: Bool
     /// False for formulae installed only as dependencies of something else
     let installedOnRequest: Bool
+    /// When the current version was put in place: an upgrade resets it for formulae;
+    /// for casks it's when the cask was first installed
     let installedDate: Date?
     /// Casks that update themselves; `brew outdated` skips these by default
     let autoUpdates: Bool
@@ -38,6 +40,9 @@ struct InstalledPackage: Identifiable, Sendable, Hashable {
     var uninstallNeedsAdmin = false
 
     /// The app was deleted (or renamed) outside Homebrew; brew's record is all that's left
+    /// `installedDate` for sorting; `Date?` isn't Comparable, so unknown dates sort as oldest
+    var installedSortDate: Date { installedDate ?? .distantPast }
+
     var isAppMissing: Bool { appStatus == .missing }
 
     /// The version actually on disk for casks that update themselves; otherwise brew's record
