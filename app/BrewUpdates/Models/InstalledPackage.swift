@@ -79,6 +79,19 @@ struct InstalledPackage: Identifiable, Sendable, Hashable {
         return CaskApp.isBehind(appVersion: version, latest: latestVersion)
     }
 
+    /// For each formula, the names of installed formulae that declare it as a direct
+    /// dependency, keyed by full name (how `brew info` records dependencies). One pass over
+    /// the list, so the table can look it up per row cheaply.
+    static func dependents(in installed: [InstalledPackage]) -> [String: [String]] {
+        var result: [String: [String]] = [:]
+        for package in installed {
+            for dependency in package.directDependencies {
+                result[dependency, default: []].append(package.name)
+            }
+        }
+        return result.mapValues { $0.sorted { $0.localizedStandardCompare($1) == .orderedAscending } }
+    }
+
     /// Decodes the `brew info --json=v2` document into a single sorted list.
     static func parseBrewInfo(_ data: Data) throws -> [InstalledPackage] {
         let info = try JSONDecoder().decode(BrewInfoDocument.self, from: data)

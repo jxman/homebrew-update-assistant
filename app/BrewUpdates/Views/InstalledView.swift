@@ -5,7 +5,7 @@ struct InstalledView: View {
     enum Filter: String, CaseIterable, Identifiable {
         case all = "All"
         case outdated = "Outdated"
-        case topLevel = "Top-level"
+        case requested = "Requested"
         case casks = "Casks"
 
         var id: String { rawValue }
@@ -20,6 +20,8 @@ struct InstalledView: View {
     @State private var selection: Set<InstalledPackage.ID> = []
     @State private var sortOrder = [KeyPathComparator(\InstalledPackage.name, comparator: .localizedStandard)]
     @State private var showInspector = true
+    /// Who needs each formula, rebuilt only when the package list changes (not on every render)
+    @State private var dependents: [String: [String]] = [:]
 
     /// Recomputed on every render from the source data, so it can never get out of sync
     private var rows: [InstalledPackage] {
@@ -53,6 +55,7 @@ struct InstalledView: View {
                     ForEach(Filter.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .help("Requested: packages you installed yourself, not ones pulled in as dependencies")
             }
             ToolbarItem {
                 Button {
@@ -61,6 +64,9 @@ struct InstalledView: View {
                     Label("Details", systemImage: "sidebar.right")
                 }
             }
+        }
+        .onChange(of: model.installed, initial: true) {
+            dependents = InstalledPackage.dependents(in: model.installed)
         }
         .inspector(isPresented: $showInspector) {
             inspector
@@ -125,7 +131,8 @@ struct InstalledView: View {
             }
             .width(min: 130, ideal: 150)
             TableColumn("Status") { package in
-                StatusPills(package: package, isExcluded: model.config.isExcluded(package))
+                StatusPills(package: package, isExcluded: model.config.isExcluded(package),
+                            neededBy: dependents[package.fullName] ?? [])
             }
         }
         // Right-click menu. It receives the rows it applies to: the selection, or the clicked
@@ -145,7 +152,7 @@ struct InstalledView: View {
         switch filter {
         case .all: true
         case .outdated: package.isOutdated
-        case .topLevel: package.installedOnRequest
+        case .requested: package.installedOnRequest
         case .casks: package.kind == .cask
         }
     }
@@ -165,6 +172,8 @@ struct InstalledView: View {
 private struct StatusPills: View {
     let package: InstalledPackage
     let isExcluded: Bool
+    /// Installed formulae that depend on this one directly
+    var neededBy: [String] = []
 
     var body: some View {
         HStack(spacing: 4) {
@@ -180,6 +189,11 @@ private struct StatusPills: View {
             if package.isPinned { Pill(text: "Pinned", color: .purple) }
             if isExcluded { Pill(text: "Excluded", color: .red) }
             if !package.installedOnRequest { Pill(text: "Dependency") }
+            // Requested, but something else needs it too, so removing it would break that
+            if package.installedOnRequest, !neededBy.isEmpty {
+                Pill(text: neededBy.count == 1 ? "Needed by \(neededBy[0])" : "Needed by \(neededBy.count) packages")
+                    .help("You installed this, and \(neededBy.joined(separator: ", ")) also needs it")
+            }
             if package.autoUpdates { Pill(text: "Auto-updates", color: .blue) }
         }
     }
@@ -200,7 +214,8 @@ private struct PackageDetailView: View {
                     if let summary = package.summary {
                         Text(summary).foregroundStyle(.secondary)
                     }
-                    StatusPills(package: package, isExcluded: config.isExcluded(package))
+                    StatusPills(package: package, isExcluded: config.isExcluded(package),
+                                neededBy: InstalledPackage.dependents(in: installed)[package.fullName] ?? [])
                 }
                 Section("Versions") {
                     LabeledContent("Installed", value: package.isAppMissing ? "Not on disk" : package.displayedVersion)

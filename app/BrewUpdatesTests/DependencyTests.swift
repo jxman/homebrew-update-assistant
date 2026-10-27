@@ -65,6 +65,14 @@ struct DependencyTests {
         PackageDependencies(of: installed.first { $0.name == name }!, in: installed)
     }
 
+    @Test func listsDirectDependentsByFullName() {
+        let dependents = InstalledPackage.dependents(in: installed)
+        #expect(dependents["aws-c-auth"] == ["aws-sam-cli", "awscli"])
+        #expect(dependents["aws-c-common"] == ["aws-c-auth", "aws-c-io"])
+        // Indirect needs don't count: awscli only reaches aws-c-common through others
+        #expect(dependents["awscli"] == nil)
+    }
+
     private static func formula(
         _ name: String, fullName: String? = nil, onRequest: Bool = false, direct: [String] = [], indirect: [String] = []
     ) -> InstalledPackage {

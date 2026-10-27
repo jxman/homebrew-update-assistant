@@ -231,6 +231,11 @@ Instead of storing filtered lists, views compute them, for example `rows` in `In
 and `outdatedPackages` in `AppModel`. Computed values can't go stale because they're
 recalculated from the source data on every render.
 
+The exception is work the table would repeat for every row. `InstalledView`'s `dependents`
+(who needs each formula, for the "Needed by" pill) is `@State`, rebuilt by
+`.onChange(of: model.installed, initial: true)`: once when the screen appears (`initial: true`)
+and again only when the package list changes.
+
 ### 8. Lists, tables and identity
 
 `List`, `ForEach` and `Table` need to tell rows apart, so the models conform to `Identifiable`
