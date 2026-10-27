@@ -137,6 +137,9 @@ struct RunDetailView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                // A new control whenever the tabs change: the AppKit segmented control keeps
+                // its old width, so going from a 1-log run to a 5-log run squeezed them to "Ma…"
+                .id(run.viewableLogs)
                 .padding(8)
                 if let url = run.files[selectedLog] {
                     // `.id(url)` gives each file a fresh LogView, resetting its filters and scroll
@@ -181,7 +184,8 @@ private struct RunSummaryHeader: View {
 
     private func details(_ summary: RunSummary) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
+            // Wraps onto another line when the pane is narrow instead of widening it
+            FlowLayout(spacing: 6) {
                 Pill(text: summary.trigger)
                 if summary.dryRun { Pill(text: "dry run", color: .purple) }
                 Pill(text: summary.durationSeconds.durationDescription)
@@ -207,7 +211,10 @@ private struct RunSummaryHeader: View {
         if !names.isEmpty {
             HStack(alignment: .firstTextBaseline) {
                 Text(title).foregroundStyle(color).frame(width: 100, alignment: .leading)
-                Text(names.joined(separator: ", ")).textSelection(.enabled)
+                Text(names.joined(separator: ", "))
+                    .textSelection(.enabled)
+                    // Grow taller (wrap) rather than wider
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

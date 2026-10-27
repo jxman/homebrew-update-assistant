@@ -187,6 +187,19 @@ only the content and pads outside it. See `Card` in `Views/Components.swift`.
 aligns rows and columns (the System card in `DashboardView`), and `LazyVGrid` flows cards into
 as many columns as fit (the dashboard cards).
 
+When the built-in containers don't fit, you can write your own `Layout`. `FlowLayout`
+(`Components.swift`) wraps the run header's pills onto a new line like words in a paragraph:
+`sizeThatFits` reports how big it is for the offered width, and `placeSubviews` positions each
+child.
+
+`.fixedSize(horizontal: false, vertical: true)` lets a `Text` grow taller instead of wider, so a
+long package list wraps instead of pushing buttons off the edge.
+
+Some SwiftUI controls are AppKit controls underneath and don't always resize when their
+contents change. The log tabs in `RunDetailView` kept the width of the first run shown, so a
+run with more log files got tabs squeezed to "Ma…". `.id(run.viewableLogs)` fixes it: a
+different set of tabs counts as a different view, so SwiftUI builds a fresh control.
+
 ### 4. `@State`: data a view owns
 
 `@State` stores values that belong to one view and survive re-renders, such as the search text
