@@ -32,6 +32,11 @@ extension AppModel {
         pendingUninstall = plan
     }
 
+    /// What uninstalling `plan` really takes: itself, or with everything that needs it
+    func uninstallPlanIncludingDependents(_ plan: UninstallPlan) -> UninstallPlan {
+        plan.includingDependents(in: installed)
+    }
+
     /// Runs `brew uninstall` with live output. brew itself refuses to remove anything another
     /// installed formula still needs, so no `--ignore-dependencies`.
     func uninstall(_ plan: UninstallPlan) {

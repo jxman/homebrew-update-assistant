@@ -71,10 +71,16 @@ struct ContentView: View {
             presenting: model.pendingUninstall
         ) { plan in
             // `role: .destructive` shows the button in red
-            Button(uninstallTitle, role: .destructive) { model.uninstall(plan) }
+            if plan.isBlocked {
+                // brew would refuse the selection as it is, so offer only what it will accept
+                let expanded = model.uninstallPlanIncludingDependents(plan)
+                Button(Self.uninstallButtonTitle(expanded.names), role: .destructive) { model.uninstall(expanded) }
+            } else {
+                Button(uninstallTitle, role: .destructive) { model.uninstall(plan) }
+            }
             Button("Cancel", role: .cancel) {}
         } message: { plan in
-            Text(plan.message)
+            Text(plan.isBlocked ? plan.blockedMessage(expanded: model.uninstallPlanIncludingDependents(plan)) : plan.message)
         }
         .alert(
             "Couldn't change packages",
@@ -91,8 +97,19 @@ struct ContentView: View {
     }
 
     private var uninstallTitle: String {
-        guard let names = model.pendingUninstall?.names else { return "" }
-        return names.count == 1 ? "Uninstall \(names[0])?" : "Uninstall \(names.count) Packages?"
+        guard let plan = model.pendingUninstall else { return "" }
+        let names = plan.names
+        let subject = names.count == 1 ? names[0] : "\(names.count) Packages"
+        return plan.isBlocked ? "Can't Uninstall \(subject) on Its Own" : "Uninstall \(subject)?"
+    }
+
+    /// "Uninstall shellcheck and actionlint", or a count when the list is long
+    private static func uninstallButtonTitle(_ names: [String]) -> String {
+        switch names.count {
+        case 1: "Uninstall \(names[0])"
+        case 2: "Uninstall \(names[0]) and \(names[1])"
+        default: "Uninstall All \(names.count) Packages"
+        }
     }
 
     private func confirmationMessage(for action: ScriptAction) -> String {
