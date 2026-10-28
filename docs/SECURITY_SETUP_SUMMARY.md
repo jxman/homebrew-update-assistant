@@ -52,7 +52,7 @@ SECURITY_SCAN_SEVERITY=HIGH,CRITICAL
 EOF
 
 # 2. Run the script
-cd "/Users/johxan/Documents/my-projects/scripts/Brew Updates"
+cd ~/Documents/my-projects/scripts/brewUpdates
 ./brew-updates.command
 
 # 3. Review security report
@@ -104,7 +104,7 @@ Security scans will run automatically with your existing LaunchAgent setup if en
 
 ## 📁 File Locations
 
-- **Script**: `/Users/johxan/Documents/my-projects/scripts/Brew Updates/brew-updates.command`
+- **Script**: `~/Documents/my-projects/scripts/brewUpdates/brew-updates.command (deployed to ~/bin/)`
 - **Config**: `~/.brew_update_config`
 - **Security Reports**: `~/.brew_logs/brew_update_*.security.log`
 - **Main Logs**: `~/.brew_logs/brew_update_*.log`

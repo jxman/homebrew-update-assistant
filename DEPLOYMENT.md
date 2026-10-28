@@ -191,6 +191,66 @@ Or just run:
 ./scripts/setup.sh
 ```
 
+## Custom Schedules
+
+The app's Settings → Schedule tab is the easiest way to change the schedule. It rewrites the plist (keeping a `.app-backup`) and reloads it. To edit by hand, change `StartCalendarInterval` in `~/Library/LaunchAgents/com.user.brew-update.plist` (not the sample in `examples/`):
+
+```xml
+<!-- Daily at 3:00 AM (the default) -->
+<key>StartCalendarInterval</key>
+<dict>
+    <key>Hour</key>
+    <integer>3</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+</dict>
+
+<!-- Every Sunday at noon (Weekday: 0=Sunday … 6=Saturday) -->
+<key>StartCalendarInterval</key>
+<dict>
+    <key>Weekday</key>
+    <integer>0</integer>
+    <key>Hour</key>
+    <integer>12</integer>
+</dict>
+
+<!-- Monday 9 AM and Friday 5 PM -->
+<key>StartCalendarInterval</key>
+<array>
+    <dict>
+        <key>Weekday</key>
+        <integer>1</integer>
+        <key>Hour</key>
+        <integer>9</integer>
+    </dict>
+    <dict>
+        <key>Weekday</key>
+        <integer>5</integer>
+        <key>Hour</key>
+        <integer>17</integer>
+    </dict>
+</array>
+```
+
+Then reload it (not while a run is in progress, because `bootout` stops it):
+
+```bash
+launchctl bootout gui/$(id -u)/com.user.brew-update
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.user.brew-update.plist
+```
+
+`setup.sh` keeps the edited plist on later deploys. `./scripts/setup.sh --reset-launchagent` restores the default.
+
+### Cron (Linux, or instead of the LaunchAgent)
+
+On macOS, cron needs Full Disk Access and doesn't catch up on runs missed while the Mac was asleep, so the LaunchAgent is preferred.
+
+```bash
+crontab -e
+0 3 * * *   ~/bin/brew-updates.command --yes >> ~/.brew_logs/cron.log 2>&1   # daily 3 AM
+0 9 * * 1,5 ~/bin/brew-updates.command --yes                                 # Mon + Fri 9 AM
+```
+
 ## Uninstalling
 
 ### Complete Uninstall (Remove Everything)
@@ -434,4 +494,4 @@ deploy-brew
 
 - [README.md](README.md) - User documentation
 - [CLAUDE.md](CLAUDE.md) - Development guidelines
-- [CHANGELOG.md](CHANGELOG.md) - Version history
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) - Version history
