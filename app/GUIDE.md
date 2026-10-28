@@ -354,6 +354,14 @@ copies it, so editing the draft can never change the original by accident.
 `ConfigDraft.changes(from:)` compares the two and writes only the keys that changed, so lines
 you edited by hand in the config file are left alone.
 
+There is no Cancel button: a Settings window isn't a modal dialog, so closing it is how you
+leave, and closing **discards unsaved changes**. macOS can keep the Settings window's views around
+after it closes, so `@State` alone would bring the old draft back. `SettingsView` changes a
+`session` UUID in `.onDisappear` (which fires when the window closes, not when switching tabs)
+and puts `.id(session)` on the `TabView`. A new id means new views with new `@State` (see
+section 26), so reopening loads fresh from disk. Switching tabs keeps your edits, because each
+tab's `.task` only reloads when there are no unsaved changes.
+
 ### 21. `@Binding`: editing a parent's state from a child view
 
 `ExclusionListEditor` (in `UpdateSettingsView.swift`) declares `@Binding var names`. The
