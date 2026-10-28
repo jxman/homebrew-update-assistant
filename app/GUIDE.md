@@ -139,7 +139,7 @@ your actual runs and packages. If a preview stops updating, press ⌥⌘P.
 | **Tweaking layout and visuals** | **Xcode: previews** | Instant visual feedback |
 | Stepping through a bug | Xcode: breakpoints | The debugger is in Xcode |
 | Build settings, signing | `project.yml`, then regenerate | Xcode edits would be overwritten |
-| Committing | Terminal | Pre-commit hooks (SwiftLint, ShellCheck, gitleaks…) run on `git commit` |
+| Committing | Terminal | Pre-commit hooks (SwiftLint, ShellCheck, ggshield…) run on `git commit` |
 
 **In practice:** Claude makes changes and verifies them from the terminal. You switch to
 Xcode to press ⌘R and look, or to use previews when you want to adjust how something looks.
