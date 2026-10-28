@@ -98,3 +98,6 @@ app/BrewUpdates/Info.plist
 
 # Zips made by scripts/install-app.sh --package
 dist/
+
+# ggshield (GitGuardian) local cache
+.cache_ggshield

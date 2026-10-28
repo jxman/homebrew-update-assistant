@@ -39,9 +39,6 @@ repos:
       # Check JSON syntax
       - id: check-json
 
-      # Detect private keys
-      - id: detect-private-key
-
       # Check for merge conflict markers
       - id: check-merge-conflict
 
@@ -84,6 +81,14 @@ repos:
         language: script
         files: ^app/.*\.swift$
         pass_filenames: false
+
+      # Scan staged changes for secrets (GitGuardian); fails closed if ggshield is missing
+      - id: ggshield
+        name: ggshield - secret scan
+        entry: ./hooks/ggshield.sh
+        language: script
+        pass_filenames: false
+        stages: [pre-commit]
 
       # Custom hook to ensure scripts are executable
       - id: check-script-executable
