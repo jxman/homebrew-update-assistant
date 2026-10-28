@@ -151,7 +151,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             "The chart shows how the count changes over time; pick a range above it. "
                 + "**Fix Available** shows how long a fixed version has been out.",
             "**Scan Now** (⇧⌘S) runs a fresh scan. Its result is shown but not saved. Scans need "
-                + "grype (`brew install grype`) and scanning turned on in Settings."
+                + "grype (`brew install --cask grype`) and scanning turned on in Settings."
         ]
         case .doctor: [
             "The warnings from `brew doctor`, explained in plain language, with suggested fixes. "
@@ -193,7 +193,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
                 + "holds the run lock. Wait for it to finish; a stale lock clears itself.",
             "**A run failed:** open it in Runs and read the log. Failures from network problems are "
                 + "retried automatically; a full disk needs at least 1 GB free.",
-            "**No security results:** install grype with `brew install grype` and turn on scanning "
+            "**No security results:** install grype with `brew install --cask grype` and turn on scanning "
                 + "in Settings → Updates.",
             "**No notifications:** allow them for terminal-notifier (or Script Editor) in System "
                 + "Settings → Notifications, and check Focus mode."

@@ -98,7 +98,7 @@ Each part is covered in its own section below.
 | --- | --- | --- | --- |
 | Homebrew | [brew.sh](https://brew.sh) | Yes | Script exits with code 4 |
 | git | Xcode Command Line Tools | Yes | Pre-flight check fails |
-| Grype | `brew install grype` | For scans | Scan is skipped with a warning |
+| Grype | `brew install --cask grype` | For scans | Scan is skipped with a warning |
 | jq | `brew install jq` | For detailed scan report | Only the table and JSON reports are written |
 | terminal-notifier | `brew install terminal-notifier` | No | Notifications aren't clickable |
 | coreutils | `brew install coreutils` | No | Commands run without `gtimeout` (no timeout) |
@@ -386,7 +386,7 @@ LaunchAgent management, custom schedules, cron and uninstalling are in [DEPLOYME
 | Exit code 5 | Another run (scheduled, app or terminal) is in progress. A stale lock clears itself |
 | Network errors (exit 2) | `ping -c 3 github.com`. Raise `BREW_UPDATE_MAX_RETRIES` / `BREW_UPDATE_TIMEOUT` |
 | Disk space (exit 3) | `df -h $(brew --prefix)`, `brew cleanup --prune=all` |
-| Scan skipped | `grype version`. Install with `brew install grype` |
+| Scan skipped | `grype version`. Install with `brew install --cask grype` |
 | Grype's first scan is slow | It's downloading its vulnerability DB. Later scans use the cached copy |
 | No notifications | System Settings → Notifications → terminal-notifier / Script Editor; Focus mode; `ENABLE_NOTIFICATIONS` |
 | Script and `~/bin` copy differ | Run `./scripts/setup.sh` |

@@ -330,7 +330,7 @@ check_dependencies() {
         print_success "grype: $(grype version 2>/dev/null | head -1 || echo 'installed')"
     else
         print_warning "grype not found (security scanning will be skipped)"
-        print_info "Install with: brew install anchore/grype/grype"
+        print_info "Install with: brew install --cask grype"
     fi
 
     if command -v jq &> /dev/null; then
