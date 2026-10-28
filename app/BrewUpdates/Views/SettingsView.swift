@@ -3,20 +3,33 @@ import SwiftUI
 /// The Settings window (⌘, or "Settings…" in the app and menu bar menus).
 ///
 /// Each tab edits a *draft* copy and writes it only on Save: saving the schedule reloads the
-/// LaunchAgent, which shouldn't happen on every click.
+/// LaunchAgent, which shouldn't happen on every click. Closing the window discards unsaved
+/// drafts, so reopening always shows what is on disk.
 struct SettingsView: View {
+    /// Changed when the window closes. `.id(session)` then gives the tabs new `@State` (fresh
+    /// drafts) the next time the window opens.
+    @State private var session = UUID()
+    @State private var selectedTab = SettingsTab.schedule
+
     var body: some View {
         // `Tab` (macOS 15+) gives the toolbar-style tabs used by system Settings windows
-        TabView {
-            Tab("Schedule", systemImage: "calendar") {
+        TabView(selection: $selectedTab) {
+            Tab("Schedule", systemImage: "calendar", value: .schedule) {
                 ScheduleSettingsView()
             }
-            Tab("Updates", systemImage: "gearshape") {
+            Tab("Updates", systemImage: "gearshape", value: .updates) {
                 UpdateSettingsView()
             }
         }
+        .id(session)
         .frame(width: 560, height: 640)
+        // Fires when the window closes, not when switching tabs (the TabView itself stays)
+        .onDisappear { session = UUID() }
     }
+}
+
+private enum SettingsTab: Hashable {
+    case schedule, updates
 }
 
 /// Bottom bar of a settings tab: unsaved/validation/error message, Revert and Save (⌘S).

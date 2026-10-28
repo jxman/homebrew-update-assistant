@@ -58,9 +58,10 @@ struct UpdateSettingsView: View {
                 onSave: { Task { await save() } }
             )
         }
+        // Keep unsaved edits when just switching tabs
         .task {
             await model.reloadSettings()
-            load()
+            if !hasChanges { load() }
         }
         // E.g. an exclusion changed from the Installed screen
         .onChange(of: model.config) {

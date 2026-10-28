@@ -43,10 +43,11 @@ struct ScheduleSettingsView: View {
                 onSave: { Task { await save() } }
             )
         }
-        // Re-read the plist each time the tab opens, in case it was edited elsewhere
+        // Re-read the plist each time the tab opens, in case it was edited elsewhere, but keep
+        // unsaved edits when just switching tabs
         .task {
             await model.reloadSettings()
-            load()
+            if !hasChanges { load() }
         }
         // Pick up outside changes, but never throw away the user's unsaved edits
         .onChange(of: model.schedule) {
