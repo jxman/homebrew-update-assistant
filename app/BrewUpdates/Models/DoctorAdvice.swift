@@ -38,6 +38,9 @@ enum DoctorCheck: String, CaseIterable, Sendable {
     case uncommittedChanges
     case unneededTaps
     case permissions
+    /// Not a doctor check: Homebrew's deprecation warning about a tap's own code, printed
+    /// whenever brew loads it ("Calling `postflight` is deprecated! Use `postflight_steps` instead.")
+    case tapDeprecation
     /// Found by the app itself, not brew doctor (see `DoctorIssue.missingCaskApps`)
     case missingCaskApps
     /// Found by the app itself (see `DoctorIssue.unreadableCasks`)
@@ -63,7 +66,8 @@ enum DoctorCheck: String, CaseIterable, Sendable {
         (.tapBranch, ["default git origin branch", "\"master\" branch"]),
         (.uncommittedChanges, ["uncommitted modifications"]),
         (.unneededTaps, ["deprecated, official taps", "deprecated Cask taps", "unnecessary local"]),
-        (.permissions, ["not writable", "directories do not exist", "world-writable", "multiple Cellars"])
+        (.permissions, ["not writable", "directories do not exist", "world-writable", "multiple Cellars"]),
+        (.tapDeprecation, ["is deprecated! Use", "is disabled! Use"])
     ]
 
     init(headline: String) {
@@ -76,7 +80,7 @@ enum DoctorCheck: String, CaseIterable, Sendable {
         switch self {
         case .missingDependencies, .xcodeLicense, .permissions:
             .important
-        case .strayFiles, .unsupportedMacOS, .brokenSymlinks, .duplicateNames:
+        case .strayFiles, .unsupportedMacOS, .brokenSymlinks, .duplicateNames, .tapDeprecation:
             .informational
         default:
             .recommended
@@ -143,6 +147,11 @@ struct DoctorAdvice: Sendable {
         case .unreadableCasks:
             return items.prefix(5).map { DoctorFix(title: "See Homebrew's full error for \($0)", command: "brew info --cask \($0)") }
                 + whenItems(items, DoctorFix(title: "Once the tap publishes a fix, fetch it", command: "brew update"))
+        case .tapDeprecation:
+            let repositories = items.compactMap(tapRepository(fromPath:))
+            return Array(Set(repositories)).sorted().map {
+                DoctorFix(title: "See whether \($0) already has a report, or add one", command: "open https://github.com/\($0)/issues")
+            } + [DoctorFix(title: "Once the tap publishes a fix, fetch it", command: "brew update")]
         case .missingCaskApps:
             return items.prefix(5).map { DoctorFix(title: "To keep \($0), reinstall it instead", command: "brew reinstall --cask \($0)") }
         case .path:
@@ -153,6 +162,12 @@ struct DoctorAdvice: Sendable {
         default:
             return fixedFixes[issue.check, default: []]
         }
+    }
+
+    /// `terraform-linters/homebrew-tap` from `/opt/homebrew/Library/Taps/terraform-linters/homebrew-tap/Casks/tflint.rb:35`
+    static func tapRepository(fromPath path: String) -> String? {
+        guard let match = path.firstMatch(of: #/Library/Taps/([^/]+)/([^/]+)//#) else { return nil }
+        return "\(match.1)/\(match.2)"
     }
 
     private static func whenItems(_ items: [String], _ fix: DoctorFix) -> [DoctorFix] {
@@ -220,6 +235,10 @@ struct DoctorAdvice: Sendable {
             + "or removed or renamed by the app's own updater. Homebrew only notices removals made with brew, so the "
             + "old record stays, shows a stale version, and can leave background helpers behind. Clearing the record "
             + "runs the cask's uninstall steps, which also removes those helpers.",
+        .tapDeprecation: "A third-party tap uses something Homebrew has deprecated, so brew prints this warning "
+            + "whenever it loads that tap. Nothing on your Mac needs fixing and the package still works; the tap's "
+            + "maintainers have to update their code. It goes away after brew update once they do. If Homebrew later "
+            + "removes the old feature before then, the package may stop loading (see unreadable casks).",
         .permissions: "Homebrew can't write to some of its own folders, so installs and upgrades will fail. This "
             + "usually follows running brew with sudo, or migrating to a new Mac."
     ]

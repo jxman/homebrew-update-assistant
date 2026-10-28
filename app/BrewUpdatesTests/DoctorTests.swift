@@ -141,6 +141,24 @@ struct DoctorReportTests {
         #expect(fixes == ["brew link foo", "brew link --overwrite --dry-run foo"])
     }
 
+    @Test func explainsDeprecationsInThirdPartyTaps() throws {
+        let report = DoctorReport.parse("""
+            Warning: Calling `postflight` is deprecated! Use `postflight_steps` instead.
+            Please report this issue to the terraform-linters/homebrew-tap tap (not Homebrew/* repositories), \
+            or even better, submit a PR to fix it:
+              /opt/homebrew/Library/Taps/terraform-linters/homebrew-tap/Casks/tflint.rb:35
+
+            """)
+        let issue = try #require(report.issues.first)
+        #expect(issue.check == .tapDeprecation)
+        #expect(issue.importance == .informational)
+        #expect(issue.items == ["/opt/homebrew/Library/Taps/terraform-linters/homebrew-tap/Casks/tflint.rb:35"])
+        #expect(DoctorAdvice(issue: issue, in: report).fixes.compactMap(\.command) == [
+            "open https://github.com/terraform-linters/homebrew-tap/issues", "brew update"
+        ])
+        #expect(DoctorAdvice.tapRepository(fromPath: "/usr/local/bin/tool") == nil)
+    }
+
     @Test(arguments: [
         ("You are using macOS 27.", DoctorCheck.unsupportedMacOS),
         ("You have not agreed to the Xcode license.", .xcodeLicense),
