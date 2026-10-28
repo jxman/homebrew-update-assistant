@@ -109,10 +109,11 @@ enum HelpTopic: String, CaseIterable, Identifiable {
                 + "`~/bin/brew-updates.command`, which a scheduled job runs every day (3 AM by default). "
                 + "Each run backs up your package list, updates Homebrew, upgrades outdated packages, "
                 + "runs `brew doctor`, scans for vulnerabilities and cleans up.",
-            "The app shows the results of those runs and lets you act on them. **Update All…** and "
-                + "**Dry Run** in the toolbar run the same script, so a run from the app gets the same "
-                + "backup, logs and summary as a scheduled one. A dry run shows what would change "
-                + "without changing anything.",
+            "The app shows the results of those runs and lets you act on them. **Dry Run** (⇧⌘U) "
+                + "and **Update All** (⌘U) in the toolbar, also in the **Run** menu, run the same script, "
+                + "so a run from the app gets the same backup, logs and summary as a scheduled one. "
+                + "A dry run shows what would change without changing anything; Update All shows how "
+                + "many packages it will upgrade and asks before starting. **Stop** (⌘.) cancels a run.",
             "Only one run can happen at a time. If a scheduled run is going, the app waits for it.",
             "If the app says the script is missing or too old, run `./scripts/setup.sh` in the "
                 + "project folder to deploy it."

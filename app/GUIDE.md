@@ -455,6 +455,28 @@ forward. `HelpView` is a `NavigationSplitView` over the `HelpTopic` enum: the he
 and `Text(LocalizedStringKey(paragraph))` renders the Markdown in it (`**bold**`, `` `code` ``).
 A plain `Text(someString)` would show the asterisks literally.
 
+### 28. Toolbar buttons with text, and a menu of your own
+
+The toolbar's `RunControl` used to be one `Menu` with a `primaryAction`: clicking ran Update
+All and the small arrow hid Dry Run. Now it's two plain `Button`s inside a `ToolbarItemGroup`,
+which lays several controls out side by side:
+
+- `.labelStyle(.titleAndIcon)` keeps the words. In a toolbar a `Label` normally shows only
+  its icon.
+- `.buttonStyle(.borderedProminent)` fills Update All with the accent colour, so the button
+  that changes things stands out from Dry Run.
+
+`CommandMenu("Run") { RunMenuItems(model: model) }` adds a whole new menu to the menu bar
+(compare `CommandGroup`, which adds to or replaces part of an existing one). Menu items get
+their shortcuts from `.keyboardShortcut("u")` (⌘U) and `.keyboardShortcut("u", modifiers:
+[.command, .shift])` (⇧⌘U). The shortcuts are defined once, in the menu, not on the toolbar
+buttons too: two controls claiming the same shortcut is ambiguous.
+
+Commands are outside the window, so `@Environment(AppModel.self)` isn't available there.
+`RunMenuItems` takes the model as a plain property instead. Because `AppModel` is
+`@Observable`, reading `model.canStartRun` in `body` is still tracked, and the menu items
+enable and disable themselves as runs start and finish.
+
 ## Trying the actions safely
 
 - **Dry Run** (toolbar Update menu ▾, or the menu bar) changes nothing and shows the live output.

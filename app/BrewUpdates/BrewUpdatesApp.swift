@@ -27,6 +27,10 @@ struct BrewUpdatesApp: App {
                 }
                 .keyboardShortcut("r")
             }
+            // `CommandMenu` adds a whole new menu to the menu bar, between View and Window
+            CommandMenu("Run") {
+                RunMenuItems(model: model)
+            }
             // `replacing: .help` swaps out the default Help item, which only works with an
             // Apple Help Book, for one that opens the Help window below
             CommandGroup(replacing: .help) {

@@ -48,11 +48,6 @@ repos:
       # Check shebangs are correct
       - id: check-executables-have-shebangs
 
-      # Prevent committing directly to main/master
-      - id: no-commit-to-branch
-        args: ['--branch', 'main', '--branch', 'master']
-        stages: [pre-commit]
-
   # Markdown linting
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.43.0

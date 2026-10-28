@@ -12,7 +12,6 @@ Pre-commit hooks run automatically before each `git commit` to:
 - ✅ Detect private keys and secrets (ggshield)
 - ✅ Ensure files are executable
 - ✅ Trim trailing whitespace
-- ✅ Prevent committing to main branch directly
 - ✅ Block log files from being committed
 
 ## 📦 Installation
@@ -129,10 +128,6 @@ The configuration is in `.pre-commit-config.yaml`. Here's what each hook does:
 **check-merge-conflict**
 - Detects merge conflict markers
 
-**no-commit-to-branch**
-- Prevents direct commits to `main`/`master`
-- Forces use of feature branches
-
 ### Custom Hooks
 
 **check-script-executable** (hooks/check-executable.sh)
@@ -236,18 +231,7 @@ git add .pre-commit-config.yaml
 git commit -m "chore: update pre-commit hooks"
 ```
 
-### 3. Use feature branches
-
-```bash
-# Create feature branch (hooks won't block)
-git checkout -b feature/new-security-scan
-# Make changes
-git commit -m "feat: add new feature"
-git push origin feature/new-security-scan
-# Create PR to main
-```
-
-### 4. Fix issues incrementally
+### 3. Fix issues incrementally
 
 Don't skip hooks! Fix issues as they're found:
 

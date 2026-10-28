@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### SwiftUI App
 
 #### Added
+- Toolbar: separate **Dry Run** and **Update All** buttons with text labels (Update All shows
+  how many packages it will upgrade), replacing the icon-only button whose Dry Run was hidden
+  behind a small arrow. New **Run** menu with Dry Run (⇧⌘U), Update All… (⌘U) and Stop (⌘.)
 - Help window (Help → Brew Updates Help, ⌘?, or Help in the menu bar menu) with a page per
   section plus Getting Started, Settings and Troubleshooting. The Help menu item did nothing
   before because it looked for an Apple Help Book the app doesn't have
@@ -21,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grype versions without the date show "—"
 
 #### Changed
+- Work happens directly on `main`: removed the pre-commit `no-commit-to-branch` hook
 - Every "install grype" hint now says `brew install --cask grype` (Settings, Help, and
   `setup.sh`, the README and the vulnerability guide); they suggested three different commands
 

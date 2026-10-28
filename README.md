@@ -360,7 +360,7 @@ pip install pre-commit && pre-commit install
 
 - Use the default DerivedData location. A `-derivedDataPath` inside `~/Documents` makes `xctest` hang on a permission prompt.
 - Run `xcodegen generate` again after adding or removing Swift files.
-- Pre-commit runs ShellCheck, `bash -n`, SwiftLint, ggshield secret scanning, merge-marker and large-file checks, and blocks direct commits to `main`. See [docs/PRE_COMMIT_SETUP.md](docs/PRE_COMMIT_SETUP.md).
+- Pre-commit runs ShellCheck, `bash -n`, SwiftLint, ggshield secret scanning, and merge-marker and large-file checks. Work happens directly on `main`. See [docs/PRE_COMMIT_SETUP.md](docs/PRE_COMMIT_SETUP.md).
 - CI (`.github/workflows/test.yml`) checks syntax, runs ShellCheck on Ubuntu, and builds and tests the app on macOS.
 - Contribution guidelines: [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
 

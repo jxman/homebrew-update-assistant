@@ -26,7 +26,8 @@ struct ContentView: View {
             }
         }
         .toolbar {
-            ToolbarItem {
+            // A group so Dry Run and Update All sit side by side as separate buttons
+            ToolbarItemGroup {
                 RunControl()
             }
             ToolbarItem {
@@ -117,7 +118,7 @@ struct ContentView: View {
             + "just like the scheduled run."
         switch action {
         case .update:
-            let count = model.outdatedPackages.filter { !$0.isPinned && !model.config.isExcluded($0) }.count
+            let count = model.upgradablePackages.count
             return "Updates Homebrew and upgrades all outdated packages (\(count) right now), "
                 + "skipping pinned and excluded ones. " + steps
         case .upgrade(let packages):
@@ -149,7 +150,8 @@ struct ContentView: View {
     }
 }
 
-/// Toolbar control: Update (with Dry Run in its menu) or Stop while the app's run is active.
+/// Toolbar controls: Dry Run and Update All side by side, or Stop while the app's run is active.
+/// The keyboard shortcuts live in the Run menu (`RunMenuItems`), so they aren't repeated here.
 private struct RunControl: View {
     @Environment(AppModel.self) private var model
 
@@ -160,25 +162,41 @@ private struct RunControl: View {
             } label: {
                 Label("Stop", systemImage: "stop.fill")
             }
-            .help("Stop the running update")
+            .labelStyle(.titleAndIcon)
+            .help("Stop the running update (⌘.)")
         } else if model.isRunInProgress {
             // Started elsewhere (the LaunchAgent or Terminal); the app can only watch it
             Label("Update running", systemImage: "arrow.triangle.2.circlepath")
                 .labelStyle(.titleAndIcon)
                 .foregroundStyle(.blue)
         } else {
-            // A Menu with `primaryAction`: clicking runs the update, the arrow opens the menu
-            Menu {
-                Button("Update All…") { model.request(.update) }
-                Button("Dry Run") { model.request(.dryRun) }
+            // Toolbars show icons only by default; `.titleAndIcon` keeps the words visible
+            Button {
+                model.request(.dryRun)
             } label: {
-                Label("Update", systemImage: "arrow.down.circle")
-            } primaryAction: {
-                model.request(.update)
+                Label(ScriptAction.dryRun.title, systemImage: ScriptAction.dryRun.systemImage)
             }
+            .labelStyle(.titleAndIcon)
             .disabled(!model.canStartRun)
-            .help("Run brew-updates now (menu: dry run)")
+            .help("See what would be upgraded, without changing anything (⇧⌘U)")
+
+            Button {
+                model.request(.update)
+            } label: {
+                Label(updateTitle, systemImage: ScriptAction.update.systemImage)
+            }
+            .labelStyle(.titleAndIcon)
+            // The accent-coloured style marks the button that changes things
+            .buttonStyle(.borderedProminent)
+            .disabled(!model.canStartRun)
+            .help("Upgrade all outdated packages, after asking (⌘U)")
         }
+    }
+
+    /// "Update All · 2" when there's something to upgrade
+    private var updateTitle: String {
+        let count = model.upgradablePackages.count
+        return count > 0 ? "\(ScriptAction.update.title) · \(count)" : ScriptAction.update.title
     }
 }
 

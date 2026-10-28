@@ -69,6 +69,10 @@ final class AppModel {
     var latestRun: Run? { runs.first }
     var latestSummarizedRun: Run? { runs.first { $0.summary != nil } }
     var outdatedPackages: [InstalledPackage] { installed.filter(\.isOutdated) }
+    /// What Update All would upgrade: outdated, minus pinned and excluded packages
+    var upgradablePackages: [InstalledPackage] {
+        outdatedPackages.filter { !$0.isPinned && !config.isExcluded($0) }
+    }
     /// A run holds the script's lock (scheduled or from the app), or the app is starting one
     var isRunInProgress: Bool { runningPID != nil || liveRun?.isActive == true }
 
