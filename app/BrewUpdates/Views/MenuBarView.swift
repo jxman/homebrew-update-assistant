@@ -92,6 +92,10 @@ struct MenuBarView: View {
             NSApp.activate()
         }
         .keyboardShortcut(",")
+        Button("Help") {
+            openWindow(id: HelpTopic.windowID)
+            NSApp.activate()
+        }
         Button("Refresh") {
             Task { await model.refresh() }
         }
