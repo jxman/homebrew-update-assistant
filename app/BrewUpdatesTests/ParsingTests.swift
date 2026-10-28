@@ -190,7 +190,7 @@ struct VulnerabilityTests {
     private func finding(_ package: String) -> Vulnerability {
         Vulnerability(
             advisoryID: "CVE-\(package)", severity: .high, component: "x", installedVersion: "1", fixVersions: [],
-            homebrewPackage: package, advisoryURL: nil, summary: nil
+            fixAvailableSince: nil, homebrewPackage: package, advisoryURL: nil, summary: nil
         )
     }
 
@@ -220,6 +220,32 @@ struct VulnerabilityTests {
         #expect(first.advisoryURL?.absoluteString == "https://github.com/advisories/GHSA-5cgq-3rg8-m6cv")
         #expect(vulnerabilities[1].severity == .medium)
         #expect(vulnerabilities[1].fixVersions.isEmpty)
+
+        // Earliest of the fix dates; reports without `fix.available` have none
+        #expect(first.fixAvailableSince == Vulnerability.fixDate("2026-04-02"))
+        #expect(vulnerabilities[1].fixAvailableSince == nil)
+        #expect(vulnerabilities[1].fixAvailableSortKey == .distantFuture)
+    }
+
+    @Test(arguments: [
+        ("2026-10-28", "today"),
+        ("2026-10-27", "1 day"),
+        ("2026-10-01", "27 days"),
+        ("2026-05-11", "5 mo"),
+        ("2024-09-30", "2 yr")
+    ])
+    func describesFixAge(date: String, expected: String) throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "America/New_York"))
+        let since = Vulnerability.fixDate(date, timeZone: calendar.timeZone)
+        let now = try #require(Vulnerability.fixDate("2026-10-28", timeZone: calendar.timeZone))
+            .addingTimeInterval(20 * 3600)
+        let finding = Vulnerability(
+            advisoryID: "CVE-1", severity: .high, component: "x", installedVersion: "1", fixVersions: ["2"],
+            fixAvailableSince: since, homebrewPackage: "x", advisoryURL: nil, summary: nil
+        )
+        #expect(finding.fixAvailableAge(asOf: now, calendar: calendar) == expected)
+        #expect(Vulnerability.fixDate("not a date") == nil)
     }
 
     @Test(arguments: [
