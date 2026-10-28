@@ -9,7 +9,7 @@ Pre-commit hooks run automatically before each `git commit` to:
 - ✅ Run ShellCheck linting
 - ✅ Validate YAML and JSON files
 - ✅ Check Markdown formatting
-- ✅ Detect private keys or secrets
+- ✅ Detect private keys and secrets (ggshield)
 - ✅ Ensure files are executable
 - ✅ Trim trailing whitespace
 - ✅ Prevent committing to main branch directly
@@ -122,8 +122,9 @@ The configuration is in `.pre-commit-config.yaml`. Here's what each hook does:
 **check-yaml/check-json**
 - Validates YAML and JSON syntax
 
-**detect-private-key**
-- Scans for accidentally committed private keys
+**ggshield**
+- Scans staged changes for secrets and private keys via GitGuardian (`hooks/ggshield.sh`)
+- Uses the Homebrew ggshield: `brew install ggshield`, then `ggshield auth login` once per machine (check with `ggshield api-status`). The hook fails if ggshield is missing
 
 **check-merge-conflict**
 - Detects merge conflict markers
