@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### SwiftUI App
 
 #### Added
+- Security: range picker for the trend chart (24 Hours, 7 Days, 30 Days, 1 Year, All),
+  defaulting to 7 Days. The chart stays visible with "No scans in this range" when a range is
+  empty, and drops the per-run dots once there are more than 60 runs
 - Security: "Fix Available" column showing how long a fixed version has been out (e.g. "5 mo"),
   from grype's `fix.available` date, with the exact day on hover. Sortable; reports from older
   grype versions without the date show "—"

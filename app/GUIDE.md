@@ -419,9 +419,16 @@ most of the UI; AppKit, the older macOS framework underneath, is still there for
 sloping.
 
 The Security chart fixes its axes instead of letting Charts fit them to the data:
-`.chartXScale(domain: trendStart...Date.now)` always shows the last 7 days, `.chartXAxis`
-with `AxisMarks(values: .stride(by: .day))` puts one labelled tick on each day, and
-`.chartYScale(domain: 0...max)` starts at zero so a drop looks as big as it really is.
+`.chartXScale(domain: trendRange.domain(...))` always spans the whole chosen range,
+`.chartXAxis` with `AxisMarks(values: .stride(by: .day))` puts one labelled tick on each day
+(every 6 hours, week or 2 months for the other ranges), and `.chartYScale(domain: 0...max)`
+starts at zero so a drop looks as big as it really is.
+
+The range (24 Hours, 7 Days, 30 Days, 1 Year, All) comes from a `Picker` with
+`.pickerStyle(.segmented)`, bound to a `@State` `TrendRange` enum. Its date math lives in
+`Models/TrendRange.swift` so it can be unit-tested without the view. The axis marks are
+different for each range, so `trendAxis` is marked `@AxisContentBuilder`: like `@ViewBuilder`,
+it lets a `switch` return a different kind of content from each case.
 
 ### 26. Passing actions down, and `.id()` for a fresh view
 

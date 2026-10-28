@@ -248,6 +248,32 @@ struct VulnerabilityTests {
         #expect(Vulnerability.fixDate("not a date") == nil)
     }
 
+    /// Trend chart ranges, "now" being 2026-10-28 20:00 in New York
+    @Test(arguments: [
+        (TrendRange.day, "2026-10-27T20:00:00-04:00"),
+        (.week, "2026-10-22T00:00:00-04:00"),
+        (.month, "2026-09-29T00:00:00-04:00"),
+        (.year, "2025-10-28T00:00:00-04:00")
+    ])
+    func startsTrendRange(range: TrendRange, expected: String) throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "America/New_York"))
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-10-28T20:00:00-04:00"))
+        #expect(range.start(asOf: now, calendar: calendar) == ISO8601DateFormatter().date(from: expected))
+    }
+
+    @Test func spansAllHistoryFromOldestScan() throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-10-28T20:00:00Z"))
+        let oldest = try #require(ISO8601DateFormatter().date(from: "2024-03-01T03:00:00Z"))
+        #expect(TrendRange.all.start(asOf: now, calendar: calendar) == nil)
+        #expect(TrendRange.all.domain(oldest: oldest, asOf: now, calendar: calendar) == oldest...now)
+        // No scans, or only one from right now: fall back to the last day so the span isn't empty
+        let lastDay = now.addingTimeInterval(-24 * 3600)...now
+        #expect(TrendRange.all.domain(oldest: nil, asOf: now, calendar: calendar) == lastDay)
+        #expect(TrendRange.all.domain(oldest: now, asOf: now, calendar: calendar) == lastDay)
+    }
+
     @Test(arguments: [
         ("/gitleaks/8.30.1/bin/gitleaks", "gitleaks"),
         ("/opt/homebrew/Cellar/node/25.1.0/bin/node", "node"),
