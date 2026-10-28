@@ -234,6 +234,16 @@ struct SecurityView: View {
                 TableColumn("Fixed In") { item in
                     Text(item.fixVersions.isEmpty ? "—" : item.fixVersions.joined(separator: ", "))
                 }
+                // `value:` needs a Comparable, so sort on a non-optional key (no date sorts last).
+                // `.help` is the hover tooltip: the exact day behind the short age.
+                TableColumn("Fix Available", value: \.fixAvailableSortKey) { item in
+                    if let since = item.fixAvailableSince, let age = item.fixAvailableAge() {
+                        Text(age).help("Fix first seen \(since.formatted(date: .long, time: .omitted))")
+                    } else {
+                        Text("—")
+                    }
+                }
+                .width(min: 70, ideal: 80)
                 TableColumn("Advisory", value: \.advisoryID) { item in
                     if let url = item.advisoryURL {
                         Link(item.advisoryID, destination: url)

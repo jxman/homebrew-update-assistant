@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### SwiftUI App
+
+#### Added
+- Security: "Fix Available" column showing how long a fixed version has been out (e.g. "5 mo"),
+  from grype's `fix.available` date, with the exact day on hover. Sortable; reports from older
+  grype versions without the date show "—"
+
 ## [App 1.0.0] - 2026-10-26
 
 First versioned release of the SwiftUI app. App releases are tagged `app-vX.Y.Z`, separately

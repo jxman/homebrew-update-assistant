@@ -241,7 +241,10 @@ and again only when the package list changes.
 `List`, `ForEach` and `Table` need to tell rows apart, so the models conform to `Identifiable`
 (an `id` property). `Run.id` is the run timestamp; `InstalledPackage.id` is `formula:name`.
 Stable IDs let SwiftUI animate and keep selection correctly. `Table` with `sortOrder:` gives
-clickable, sortable column headers (`InstalledView`, `SecurityView`).
+clickable, sortable column headers (`InstalledView`, `SecurityView`). A sortable column's
+`value:` key path must be `Comparable`, which an optional isn't, so `SecurityView`'s Fix Available
+column sorts on `fixAvailableSortKey` (a plain `Date`) and displays the optional date itself.
+`.help("…")` on a view adds the hover tooltip.
 
 ### 9. Async work: `async`/`await` and `.task`
 

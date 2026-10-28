@@ -53,7 +53,9 @@ enum Fixtures {
             "id": "GHSA-5cgq-3rg8-m6cv", "severity": "Critical",
             "dataSource": "https://github.com/advisories/GHSA-5cgq-3rg8-m6cv",
             "description": "golang.org/x/crypto vulnerable to auth bypass",
-            "fix": { "versions": ["0.52.0"], "state": "fixed" }
+            "fix": { "versions": ["0.52.0"], "state": "fixed",
+                     "available": [{ "version": "0.52.0", "date": "2026-05-11", "kind": "first-observed" },
+                                   { "version": "0.51.0", "date": "2026-04-02", "kind": "first-observed" }] }
           },
           "artifact": { "name": "golang.org/x/crypto", "version": "v0.35.0", "type": "go-module",
                         "locations": [{ "path": "/gitleaks/8.30.1/bin/gitleaks" }] }
