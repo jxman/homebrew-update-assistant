@@ -85,7 +85,7 @@ struct UpdateSettingsView: View {
         } header: {
             Text("Security")
         } footer: {
-            Text("Needs grype: brew install grype")
+            Text("Needs grype: brew install --cask grype")
                 .foregroundStyle(.secondary)
         }
     }
