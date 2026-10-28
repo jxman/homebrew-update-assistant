@@ -27,7 +27,19 @@ struct BrewUpdatesApp: App {
                 }
                 .keyboardShortcut("r")
             }
+            // `replacing: .help` swaps out the default Help item, which only works with an
+            // Apple Help Book, for one that opens the Help window below
+            CommandGroup(replacing: .help) {
+                HelpMenuButton()
+            }
         }
+
+        // A second single window, opened with `openWindow(id: "help")`
+        Window("Brew Updates Help", id: HelpTopic.windowID) {
+            HelpView()
+                .frame(minWidth: 640, minHeight: 420)
+        }
+        .defaultSize(width: 820, height: 560)
 
         // `Settings` adds "Settings…" (⌘,) to the app menu and opens this in its own window
         Settings {

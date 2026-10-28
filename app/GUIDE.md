@@ -442,6 +442,19 @@ also switches the filter to All if that package is hidden).
 different view. Without it SwiftUI reuses the same view and keeps its `@State`, so a list
 you expanded with **Show all** would stay expanded for the next package.
 
+### 27. Replacing a standard menu item, and a second window
+
+The Help menu's default item opens an Apple Help Book, a special HTML bundle this app doesn't
+have, so clicking it did nothing. `CommandGroup(replacing: .help) { HelpMenuButton() }` in
+`BrewUpdatesApp` swaps it for our own button. Other standard groups (`.newItem`, `.toolbar`,
+`.appInfo`, ...) can be replaced, or added to with `before:`/`after:`, the same way.
+
+The button calls `openWindow(id: "help")`, which shows the `Window("Brew Updates Help", id:
+"help")` scene. Like the main window it's a single `Window`, so opening it again just brings it
+forward. `HelpView` is a `NavigationSplitView` over the `HelpTopic` enum: the help text is data,
+and `Text(LocalizedStringKey(paragraph))` renders the Markdown in it (`**bold**`, `` `code` ``).
+A plain `Text(someString)` would show the asterisks literally.
+
 ## Trying the actions safely
 
 - **Dry Run** (toolbar Update menu ▾, or the menu bar) changes nothing and shows the live output.

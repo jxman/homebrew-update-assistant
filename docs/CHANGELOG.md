@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### SwiftUI App
 
 #### Added
+- Help window (Help → Brew Updates Help, ⌘?, or Help in the menu bar menu) with a page per
+  section plus Getting Started, Settings and Troubleshooting. The Help menu item did nothing
+  before because it looked for an Apple Help Book the app doesn't have
 - Security: range picker for the trend chart (24 Hours, 7 Days, 30 Days, 1 Year, All),
   defaulting to 7 Days. The chart stays visible with "No scans in this range" when a range is
   empty, and drops the per-run dots once there are more than 60 runs
