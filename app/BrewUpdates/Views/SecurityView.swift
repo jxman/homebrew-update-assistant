@@ -16,8 +16,9 @@ struct SecurityView: View {
     @State private var logCounts: [Run.ID: Int] = [:]
     /// Also list findings for formulae uninstalled since the scan
     @State private var showsRemoved = false
+    /// How far back the trend chart looks
+    @State private var trendRange = TrendRange.week
 
-    private static let trendDays = 7
     /// Picker tag for the in-memory Scan Now result (run IDs are dates, so this can't clash)
     private static let manualScanID = "scan-now"
 
@@ -133,7 +134,9 @@ struct SecurityView: View {
                 }
             }
             Spacer()
-            if !trend.isEmpty {
+            // Shown whenever any run has scanned, so the range picker stays reachable even
+            // when the chosen range has no scans in it
+            if hasScanHistory {
                 trendChart
             }
         }
@@ -154,14 +157,14 @@ struct SecurityView: View {
         .font(.callout)
     }
 
-    /// Start of the chart: midnight, `trendDays - 1` days ago, so today is the last of the days
-    private var trendStart: Date {
-        let today = Calendar.current.startOfDay(for: .now)
-        return Calendar.current.date(byAdding: .day, value: -(Self.trendDays - 1), to: today) ?? today
+    private var hasScanHistory: Bool {
+        model.runs.contains { $0.summary?.security != nil || $0.files[.security] != nil }
     }
 
+    /// Runs inside the chosen range (all of them for All)
     private var recentRuns: [Run] {
-        model.runs.filter { $0.date >= trendStart }
+        guard let start = trendRange.start() else { return model.runs }
+        return model.runs.filter { $0.date >= start }
     }
 
     /// Older runs have no summary, only the scan's text report
@@ -169,7 +172,7 @@ struct SecurityView: View {
         recentRuns.filter { $0.summary == nil && $0.files[.security] != nil }
     }
 
-    /// Vulnerability counts over the last week, oldest first: from run summaries, or counted
+    /// Vulnerability counts over the chosen range, oldest first: from run summaries, or counted
     /// from the text report for runs from before summaries existed
     private var trend: [(date: Date, count: Int)] {
         recentRuns
@@ -184,24 +187,68 @@ struct SecurityView: View {
 
     private var trendChart: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Last \(Self.trendDays) days").font(.caption).foregroundStyle(.secondary)
-            Chart(trend, id: \.date) { point in
-                LineMark(x: .value("Date", point.date), y: .value("Vulnerabilities", point.count))
-                PointMark(x: .value("Date", point.date), y: .value("Vulnerabilities", point.count))
-                    .symbolSize(20)
-            }
-            .chartYAxisLabel("Findings")
-            // A fixed week, so the chart always spans the same days however many runs there were
-            .chartXScale(domain: trendStart...Date.now)
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .day)) {
-                    AxisGridLine()
-                    AxisValueLabel(format: .dateTime.weekday(.abbreviated), centered: true)
+            // A segmented picker: each case of the enum is one segment, and choosing one sets
+            // `trendRange`, which re-renders the chart with the new span
+            Picker("Range", selection: $trendRange) {
+                ForEach(TrendRange.allCases) { range in
+                    Text(range.rawValue).tag(range)
                 }
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .frame(width: 380)
+            Chart(trend, id: \.date) { point in
+                LineMark(x: .value("Date", point.date), y: .value("Vulnerabilities", point.count))
+                // Dots on every run would run together over a year of runs, so only the line then
+                if trend.count <= 60 {
+                    PointMark(x: .value("Date", point.date), y: .value("Vulnerabilities", point.count))
+                        .symbolSize(20)
+                }
+            }
+            .chartYAxisLabel("Findings")
+            // A fixed span, so the chart always covers the whole range however many runs there were
+            .chartXScale(domain: trendRange.domain(oldest: trend.first?.date))
+            .chartXAxis { trendAxis }
             // Start at zero so a drop (e.g. after upgrading) looks as big as it is
             .chartYScale(domain: 0...max(1, trend.map(\.count).max() ?? 0))
+            .overlay {
+                if trend.isEmpty {
+                    Text("No scans in this range").font(.callout).foregroundStyle(.secondary)
+                }
+            }
             .frame(width: 380, height: 110)
+        }
+    }
+
+    /// One labelled tick per hour block, day, week or month, depending on the range.
+    /// `@AxisContentBuilder` lets the `switch` return different axis marks per case.
+    @AxisContentBuilder
+    private var trendAxis: some AxisContent {
+        switch trendRange {
+        case .day:
+            AxisMarks(values: .stride(by: .hour, count: 6)) {
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.hour())
+            }
+        case .week:
+            AxisMarks(values: .stride(by: .day)) {
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.weekday(.abbreviated), centered: true)
+            }
+        case .month:
+            AxisMarks(values: .stride(by: .day, count: 7)) {
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+            }
+        case .year:
+            AxisMarks(values: .stride(by: .month, count: 2)) {
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.month(.abbreviated))
+            }
+        case .all:
+            // Any length of history: let Charts pick the ticks
+            AxisMarks()
         }
     }
 
