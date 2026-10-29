@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/logo.png" alt="Brew Updates app icon: a beer mug with a green upgrade arrow" width="128" height="128">
+</p>
+
 # Homebrew Update Assistant
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -18,6 +22,7 @@ A scheduled Bash script that keeps Homebrew updated, backed up, health-checked a
 
 ## Contents
 
+- [Screenshots](#screenshots)
 - [Architecture](#architecture)
 - [Tech stack and dependencies](#tech-stack-and-dependencies)
 - [Install](#install)
@@ -33,6 +38,27 @@ A scheduled Bash script that keeps Homebrew updated, backed up, health-checked a
 - [Troubleshooting](#troubleshooting)
 - [Known constraints](#known-constraints)
 - [Roadmap](#roadmap)
+
+## Screenshots
+
+A quick tour of the app (the GIF cycles through every screen). Click any thumbnail below for the full-size screenshot.
+
+<p align="center">
+  <a href="docs/images/app-tour.gif"><img src="docs/images/app-tour.gif" alt="Animated tour of the Brew Updates app: Dashboard, Installed, Runs, Security, Doctor and Backups" width="800"></a>
+</p>
+
+<table>
+  <tr>
+    <td align="center"><a href="docs/images/screenshots/dashboard.png"><img src="docs/images/screenshots/dashboard.png" alt="Dashboard screen" width="260"></a><br/><sub><b>Dashboard</b></sub></td>
+    <td align="center"><a href="docs/images/screenshots/installed.png"><img src="docs/images/screenshots/installed.png" alt="Installed screen" width="260"></a><br/><sub><b>Installed</b></sub></td>
+    <td align="center"><a href="docs/images/screenshots/runs.png"><img src="docs/images/screenshots/runs.png" alt="Runs screen" width="260"></a><br/><sub><b>Runs</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/images/screenshots/security.png"><img src="docs/images/screenshots/security.png" alt="Security screen" width="260"></a><br/><sub><b>Security</b></sub></td>
+    <td align="center"><a href="docs/images/screenshots/doctor.png"><img src="docs/images/screenshots/doctor.png" alt="Doctor screen" width="260"></a><br/><sub><b>Doctor</b></sub></td>
+    <td align="center"><a href="docs/images/screenshots/backups.png"><img src="docs/images/screenshots/backups.png" alt="Backups screen" width="260"></a><br/><sub><b>Backups</b></sub></td>
+  </tr>
+</table>
 
 ## Architecture
 
@@ -235,6 +261,8 @@ A native SwiftUI app in [`app/`](app/) with a menu bar extra and a main window. 
 | Backups | Compare a Brewfile backup with what's installed or with the previous backup; restore missing taps, formulae and casks |
 | Settings (⌘,) | Schedule on/off, time and days, run flags (rewrites the plist, then reloads). Every `~/.brew_update_config` setting |
 | Menu bar / Dock | Warning icon after a failed run; Dock badge with the update count |
+| Run menu | Dry Run (⇧⌘U), Update All… (⌘U) and Stop (⌘.), also on the toolbar as separate Dry Run and Update All buttons |
+| Help | A separate Help window explaining each screen |
 
 ```mermaid
 sequenceDiagram
@@ -325,6 +353,7 @@ Exclusions match exact names (`node` doesn't exclude `node@20`), and pinned form
 │   ├── Icon/                   # AppIcon.svg + make-icon.sh
 │   └── GUIDE.md                # Xcode workflow and SwiftUI walkthrough
 ├── docs/
+│   ├── images/                 # README logo (rendered from app/Icon/AppIcon.svg), app screenshots, tour GIF
 │   ├── CHANGELOG.md            # Script and app release history
 │   ├── run-summary-schema.md   # summary.json contract between script and app
 │   ├── IMPROVEMENTS.md         # Ideas backlog
