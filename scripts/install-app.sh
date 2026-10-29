@@ -98,8 +98,8 @@ if [[ "$package" == true ]]; then
     # ditto keeps the bundle's signature and extended attributes intact, unlike zip
     ditto -c -k --keepParent "$app" "$zip_path"
     echo -e "${GREEN}✓ Packaged $zip_path${NC}"
-    echo "On another Mac: unzip, move to /Applications, then right-click > Open the first time"
-    echo "(it isn't notarized, so macOS blocks a plain double-click)."
+    echo "On another Mac: run scripts/setup.sh, unzip into /Applications and open it once. It isn't"
+    echo "notarized, so then allow it in System Settings > Privacy & Security > Open Anyway."
     exit 0
 fi
 

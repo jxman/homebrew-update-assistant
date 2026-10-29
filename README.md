@@ -35,6 +35,7 @@ A scheduled Bash script that keeps Homebrew updated, backed up, health-checked a
 - [Project structure](#project-structure)
 - [Development](#development)
 - [Deployment](#deployment)
+- [Sharing with others](#sharing-with-others)
 - [Troubleshooting](#troubleshooting)
 - [Known constraints](#known-constraints)
 - [Roadmap](#roadmap)
@@ -407,6 +408,33 @@ Never edit `~/bin/brew-updates.command` directly. Edit the source here and run `
 
 LaunchAgent management, custom schedules, cron and uninstalling are in [DEPLOYMENT.md](DEPLOYMENT.md).
 
+## Sharing with others
+
+The app is signed with an Apple Development certificate and isn't notarized, so it's fine to share with people who trust you, but macOS treats a downloaded copy as unverified. The app is also only a front end: it runs the deployed script and reads `~/.brew_logs`, so every Mac needs the script installed too.
+
+**Requirements on the other Mac:** macOS 15 or later (Intel or Apple silicon; the app is a universal build), [Homebrew](https://brew.sh), and a clone of this repo.
+
+| Option | Steps | Gatekeeper |
+| --- | --- | --- |
+| **Build it there** (recommended) | Install Xcode and `brew install xcodegen`, clone the repo, run `./scripts/setup.sh`, then `./scripts/install-app.sh` | No warning. A locally built app isn't quarantined, and install-app.sh signs ad hoc when there's no certificate |
+| **Send a zip** | Run `./scripts/install-app.sh --package` here and send the zip from `dist/`. On the other Mac: clone the repo, run `./scripts/setup.sh`, unzip the app into `/Applications` | Blocked on first launch (see below) |
+
+```mermaid
+flowchart LR
+    clone["Clone repo"] --> setup["./scripts/setup.sh<br/>script + LaunchAgent"]
+    setup --> build{"Xcode installed?"}
+    build -- "yes" --> local["./scripts/install-app.sh<br/>opens normally"]
+    build -- "no" --> zip["Unzip a shared copy<br/>into /Applications"]
+    zip --> allow["Open Anyway in<br/>Privacy & Security"]
+```
+
+**Opening a shared zip the first time.** macOS says it can't verify the app is free of malware. On macOS 15 and later, right-click → Open no longer gets past this. Either:
+
+1. Try to open the app once, then go to **System Settings → Privacy & Security**, click **Open Anyway** and enter the Mac's password. This is needed only once.
+2. Or remove the quarantine flag in Terminal: `xattr -dr com.apple.quarantine "/Applications/Brew Updates.app"`
+
+**Sharing without the warning** would need a paid Apple Developer Program membership, a Developer ID Application certificate, hardened runtime turned on (`ENABLE_HARDENED_RUNTIME` is `NO` in `app/project.yml` and must be tested with brew, launchctl and the askpass helper), and notarizing the zip with `xcrun notarytool submit` and `xcrun stapler staple`. None of that is set up yet.
+
 ## Troubleshooting
 
 | Symptom | Check |
@@ -424,11 +452,11 @@ For anything else, run `--dry-run --verbose` and read the run's `.log` and `.doc
 
 ## Known constraints
 
-- **macOS first.** The LaunchAgent, notifications and the app are macOS-only. The script on its own also runs on Linux (rename it without `.command` and schedule it with cron), but that path gets less testing.
+- **macOS first.** Homebrew also runs on Linux, but the LaunchAgent, notifications, casks and the app are macOS-only, and a cross-platform app isn't planned. The script on its own is meant to run on Linux too (rename it without `.command` and schedule it with cron), but that path is untested.
 - **Bash 3.2.** The LaunchAgent runs `/bin/bash`, so the script avoids associative arrays and `mapfile`.
 - **Self-updating casks are skipped.** `auto_updates` casks aren't upgraded or counted as outdated. The app shows the app's own version for them instead.
 - **Scans are snapshots.** The app hides findings for formulae that are no longer installed. Scan Now results aren't added to the trend chart.
-- **Personal signing.** The app is signed with an Apple Development certificate (or ad hoc), not notarized, so it's only for personal use for now.
+- **Personal signing.** The app is signed with an Apple Development certificate (or ad hoc), not notarized, so a shared copy needs a one-time Gatekeeper override. See [Sharing with others](#sharing-with-others).
 
 ## Roadmap
 
