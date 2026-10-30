@@ -130,7 +130,7 @@ Each part is covered in its own section below.
 | git | Xcode Command Line Tools | Yes | Pre-flight check fails |
 | Grype | `brew install --cask grype` | For the Grype scan | Grype scan is skipped with a warning |
 | `brew vulns` | Built into Homebrew (recent versions) | For the `brew vulns` scan | `brew vulns` scan is reported as `unavailable`; Grype still runs |
-| jq | Included with macOS 15+ (`/usr/bin/jq`), or `brew install jq` | For `brew vulns` and the detailed Grype report | `brew vulns` is reported as `unavailable`, and Grype writes only its table and JSON reports |
+| jq | Included with macOS 15+ (`/usr/bin/jq`), or `brew install jq` | For `brew vulns`, the deprecation check and the detailed Grype report | `brew vulns` and the deprecation check are reported as `unavailable`, and Grype writes only its table and JSON reports |
 | terminal-notifier | `brew install terminal-notifier` | No | Notifications aren't clickable |
 | coreutils | `brew install coreutils` | No | Commands run without `gtimeout` (no timeout) |
 

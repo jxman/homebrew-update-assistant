@@ -327,17 +327,26 @@ check_dependencies() {
     fi
 
     if command -v grype &> /dev/null; then
-        print_success "grype: $(grype version 2>/dev/null | head -1 || echo 'installed')"
+        local grype_version
+        grype_version=$(grype version 2>/dev/null | awk '/^Version:/ {print $2}')
+        print_success "grype: ${grype_version:-installed}"
     else
-        print_warning "grype not found (security scanning will be skipped)"
+        print_warning "grype not found (the grype scan will be skipped; brew vulns still runs)"
         print_info "Install with: brew install --cask grype"
     fi
 
-    if command -v jq &> /dev/null; then
-        print_success "jq: installed (detailed security reports enabled)"
+    if brew vulns --help &> /dev/null; then
+        print_success "brew vulns: available (OSV.dev scan of installed formulae)"
     else
-        print_warning "jq not found (detailed security reports will be skipped)"
-        print_info "Install with: brew install jq"
+        print_warning "brew vulns not available (that scan will be reported as unavailable)"
+        print_info "Update Homebrew with: brew update"
+    fi
+
+    if command -v jq &> /dev/null; then
+        print_success "jq: $(command -v jq) (brew vulns, deprecation check and detailed grype report enabled)"
+    else
+        print_warning "jq not found (brew vulns, the deprecation check and the detailed grype report will be skipped)"
+        print_info "jq ships with macOS 15+ at /usr/bin/jq; otherwise install with: brew install jq"
     fi
 }
 

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `setup.sh`'s dependency check says what each scanner tool is for: a missing grype skips only
+  the grype scan, `brew vulns` is checked, and jq is listed as needed for `brew vulns`, the
+  deprecation check and the detailed grype report (it ships with macOS 15+). The grype line
+  shows the version number instead of "Application: grype"
+
 ### SwiftUI App
 
 #### Changed
