@@ -147,7 +147,7 @@ extension RunSummary {
 
     private static func grypeMissingReason(_ status: String) -> String {
         switch status {
-        case "dry_run": "it was a dry run, and dry runs skip grype"
+        case "dry_run": "it was a dry run, and dry runs skipped grype before script 2.4.1"
         case "disabled": "grype scanning is turned off in Settings"
         case "unavailable": "grype isn't installed (brew install --cask grype)"
         case "skipped": "the run used --skip-security-scan"

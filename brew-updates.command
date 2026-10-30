@@ -14,7 +14,7 @@ set -o pipefail
 ###################
 # Configuration
 ###################
-readonly SCRIPT_VERSION="2.4.0"
+readonly SCRIPT_VERSION="2.4.1"
 # Version of the <run>.summary.json format consumed by the UI (see docs/run-summary-schema.md)
 readonly SUMMARY_SCHEMA_VERSION=1
 
@@ -1132,13 +1132,7 @@ run_security_scan() {
     local security_detailed="${LOG_FILE%.log}.security.detailed.log"
     local vuln_count=0
 
-    # Run grype scan with severity filtering
-    if [[ "$DRY_RUN" == true ]]; then
-        SECURITY_STATUS="dry_run"
-        log_message "🔍 DRY RUN: Would scan the Cellar with grype"
-        return $EXIT_SUCCESS
-    fi
-
+    # Dry runs scan too: grype only reads the Cellar, and every run then has both scanners' reports
     # Scan Homebrew Cellar for vulnerabilities (table format for quick view)
     log_verbose "Scanning $(brew --prefix)/Cellar for vulnerabilities..."
     # Exit code intentionally ignored - vulnerabilities are informational, not fatal

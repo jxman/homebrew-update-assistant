@@ -43,11 +43,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grype versions without the date show "—"
 
 #### Changed
+- Security: runs without a grype report are labelled "brew vulns only" in the scan picker
+  (was "dry run, brew vulns only"; dry runs scan with grype from script 2.4.1), and the note
+  for an old dry run says dry runs skipped grype before 2.4.1
 - Settings treat `SECURITY_SCAN_ENABLED` as on when it's missing, matching script 2.4.0. The
   severity buttons are labelled **Show in run logs**, since they only change what the logs list
 - Work happens directly on `main`: removed the pre-commit `no-commit-to-branch` hook
 - Every "install grype" hint now says `brew install --cask grype` (Settings, Help, and
   `setup.sh`, the README and the vulnerability guide); they suggested three different commands
+
+## [2.4.1] - 2026-10-30
+
+### Changed
+- Dry runs now run the grype scan too. It only reads the Cellar, and it means every run has
+  both scanners' reports, so the app's Security tab no longer shows dry runs with brew vulns
+  results only. Dry runs take about 20 seconds longer. `security.status` is no longer `dry_run`
+  (older summaries keep it)
 
 ## [2.4.0] - 2026-10-29
 

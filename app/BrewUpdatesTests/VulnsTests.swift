@@ -201,7 +201,7 @@ struct MissingReportTests {
             Fixtures.summaryJSON.replacingOccurrences(of: #""status": "completed", "vulnerability_count""#,
                                                       with: #""status": "dry_run", "vulnerability_count""#).utf8
         ))
-        #expect(summary.missingReportReason(.grype) == "it was a dry run, and dry runs skip grype")
+        #expect(summary.missingReportReason(.grype) == "it was a dry run, and dry runs skipped grype before script 2.4.1")
         // No vulns object: the run's script predates brew vulns
         #expect(summary.missingReportReason(.brewVulns) == "it ran a script older than 2.4.0")
     }

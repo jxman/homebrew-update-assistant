@@ -61,8 +61,8 @@ struct SecurityView: View {
         model.runs.filter { $0.files[.securityJSON] != nil || $0.files[.vulnsJSON] != nil }
     }
 
-    /// The newest run with grype results, as before brew vulns existed: dry runs only have brew
-    /// vulns's, and opening on one would hide the last full scan. Any scan if none has grype.
+    /// The newest run with grype results: some runs only have brew vulns's (dry runs before
+    /// script 2.4.1), and opening on one would hide the last grype scan. Any scan if none has grype.
     private var defaultRunID: Run.ID? {
         (scannedRuns.first { $0.files[.securityJSON] != nil } ?? scannedRuns.first)?.id
     }
@@ -93,9 +93,9 @@ struct SecurityView: View {
                             .tag(Optional(Self.manualScanID))
                     }
                     ForEach(scannedRuns) { run in
-                        // Dry runs skip grype, so say which ones only have brew vulns results
+                        // e.g. dry runs before script 2.4.1, which skipped grype
                         Text(run.date.formatted(date: .abbreviated, time: .shortened)
-                            + (run.files[.securityJSON] == nil ? " (dry run, brew vulns only)" : ""))
+                            + (run.files[.securityJSON] == nil ? " (brew vulns only)" : ""))
                             .tag(Optional(run.id))
                     }
                 }

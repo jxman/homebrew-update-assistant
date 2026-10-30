@@ -59,7 +59,7 @@ instead of parsing the human-readable logs.
 | `backup.created` | bool | Brewfile backup succeeded |
 | `backup.path` | string \| null | Backup file, or `null` if missing or already rotated out |
 | `doctor.status` | string | `ok`, `warnings`, `errors`, `not_run` |
-| `security.status` | string | `completed`, `skipped`, `disabled`, `unavailable` (no grype), `dry_run`, `failed`, `not_run` |
+| `security.status` | string | `completed`, `skipped`, `disabled`, `unavailable` (no grype), `failed`, `not_run`. Runs in dry runs too since 2.4.1; older dry runs report `dry_run` |
 | `security.vulnerability_count` | int | Findings with fixes available (Critical/High/Medium) |
 | `vulns.status` | string | `brew vulns` scan: `completed`, `skipped`, `disabled` (`VULNS_SCAN_ENABLED=false`), `unavailable` (no `jq` or no `brew vulns`), `failed`, `not_run`. Runs in dry runs too. Added in 2.4.0 |
 | `vulns.finding_count` | int | Vulnerabilities found, any severity, with or without a fix. Findings fixed by a patch in the formula aren't counted |
