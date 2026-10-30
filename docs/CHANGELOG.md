@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - While a run is in progress (scheduled, from Terminal or from the app), its status icon spins
   on the Dashboard, in Recent Runs and in Runs, and the Last Run card counts the elapsed time
   up live ("running for 0:54")
+
+#### Fixed
+- Starting the app no longer flashes "No deployed script found" and "Script: not found" while
+  it is still loading: the banner waits until the script has been checked. The quick status
+  checks (script, schedule, Homebrew, disk) now finish before the doctor logs are read, and
+  the Doctor card says "Loading…" instead of "No doctor reports yet" until they are
 - README: the architecture diagram includes the deprecation check, `brew vulns` and OSV.dev,
   and reads top to bottom (triggers, script, then state and tools) instead of crossing back up.
   The dependency tables list `brew vulns`, and jq as included with macOS 15+

@@ -27,6 +27,9 @@ final class AppModel {
     private(set) var scheduleError: String?
     private(set) var isLaunchAgentLoaded: Bool?
     private(set) var scriptVersion: SemanticVersion?
+    /// False until the first refresh has looked for the deployed script, so a nil
+    /// `scriptVersion` before then means "not checked yet", not "missing"
+    private(set) var hasCheckedScript = false
     private(set) var homebrewVersion: String?
     private(set) var config = BrewConfig()
     private(set) var availableDiskSpace: Int64?
@@ -99,6 +102,7 @@ final class AppModel {
     var nextScheduledRun: Date? { isLaunchAgentLoaded == false ? nil : schedule?.nextRun(after: .now) }
 
     var isScriptOutdated: Bool {
+        guard hasCheckedScript else { return false }
         guard let scriptVersion else { return true }
         return scriptVersion < SystemStatus.minimumScriptVersion
     }
@@ -148,13 +152,16 @@ final class AppModel {
         async let installedLoad: Void = loadInstalled()
 
         apply(await snapshot)
-        await doctor.reload(runs: runs)
+        // The quick status checks first, so the Dashboard fills in before the slower
+        // parsing of every run's doctor log below
         self.config = await config
         self.scriptVersion = await scriptVersion
+        hasCheckedScript = true
         self.isLaunchAgentLoaded = await agentLoaded
         applySchedule(await schedule)
         self.homebrewVersion = await homebrewVersion
         self.availableDiskSpace = status.availableDiskSpace(brewExecutable: brew.executable)
+        await doctor.reload(runs: runs)
         await installedLoad
         lastRefreshed = .now
     }

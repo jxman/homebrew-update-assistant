@@ -188,7 +188,7 @@ struct DashboardView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                Text("No doctor reports yet")
+                Text(model.doctor.hasLoaded ? "No doctor reports yet" : "Loading…")
                     .foregroundStyle(.secondary)
             }
             Button("Review and fix") {
@@ -212,7 +212,7 @@ struct DashboardView: View {
                 }
                 GridRow {
                     Text("Script").foregroundStyle(.secondary)
-                    Text(model.scriptVersion.map { "v\($0.description)" } ?? "not found")
+                    Text(model.scriptVersion.map { "v\($0.description)" } ?? (model.hasCheckedScript ? "not found" : "—"))
                         .foregroundStyle(model.isScriptOutdated ? .orange : .primary)
                 }
                 GridRow {

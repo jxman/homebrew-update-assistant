@@ -11,6 +11,8 @@ import Observation
 final class DoctorModel {
     /// Newest first
     private(set) var snapshots: [DoctorSnapshot] = []
+    /// False until the run logs have been read once, to tell "loading" from "no reports"
+    private(set) var hasLoaded = false
     private(set) var isChecking = false
     var checkError: String?
 
@@ -50,6 +52,7 @@ final class DoctorModel {
             loaded.append(manualCheck)
         }
         snapshots = loaded.sorted { $0.date > $1.date }
+        hasLoaded = true
     }
 
     /// Runs `brew doctor` now, e.g. to confirm a fix worked, and adds it as the newest report.
