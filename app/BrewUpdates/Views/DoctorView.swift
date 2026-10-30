@@ -21,7 +21,7 @@ struct DoctorView: View {
     /// Most urgent first. The app's own checks describe now, so they join the newest report only.
     private var issues: [DoctorIssue] {
         let appIssues = isShowingLatest ? model.appDoctorIssues : []
-        return ((snapshot?.report.issues ?? []) + appIssues)
+        return DoctorIssue.merging(report: snapshot?.report.issues ?? [], app: appIssues)
             .sorted { ($0.importance, $0.headline) < ($1.importance, $1.headline) }
     }
 

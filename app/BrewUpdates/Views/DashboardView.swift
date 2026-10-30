@@ -109,6 +109,10 @@ struct DashboardView: View {
                     .foregroundStyle(summary.security.vulnerabilityCount == 0 ? Color.green : Color.red)
                 Text("known vulnerabilities with fixes (Critical/High/Medium)")
                     .foregroundStyle(.secondary)
+                if let vulns = summary.vulns, vulns.status == "completed" {
+                    Text("brew vulns: \(vulns.findingCount) in \(vulns.formulaCount) formulae, any severity")
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 Text("Open the Security tab to view the latest scan")
                     .foregroundStyle(.secondary)

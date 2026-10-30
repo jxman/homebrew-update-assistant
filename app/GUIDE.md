@@ -20,7 +20,7 @@ where it appears.
 ```mermaid
 flowchart LR
     agent["LaunchAgent<br/>(3 AM)"] --> script["~/bin/brew-updates.command"]
-    script --> logs["~/.brew_logs<br/>*.log, *.summary.json, *.security.json"]
+    script --> logs["~/.brew_logs<br/>*.log, *.summary.json, *.security.json, *.vulns.json"]
     subgraph app["Brew Updates app"]
         services["Services/<br/>RunStore, BrewService, SystemStatus,<br/>ScriptRunner, ConfigEditor,<br/>LaunchAgentService, BackupStore"] --> model["AppModel + LiveRun<br/>+ DoctorModel<br/>(shared state)"]
         model --> views["Views/<br/>Dashboard, Installed, Runs, Security,<br/>Doctor, Backups, Settings, menu bar"]
@@ -40,7 +40,7 @@ and run lock. The only direct changes are `brew pin`/`unpin`, the settings in
 
 | Folder | What lives there | Has UI code? |
 |--------|------------------|--------------|
-| `BrewUpdates/Models/` | Plain data types and parsers (run summary, logs, schedule, grype report) | No |
+| `BrewUpdates/Models/` | Plain data types and parsers (run summary, logs, schedule, grype and brew vulns reports) | No |
 | `BrewUpdates/Services/` | Talking to the system: files, `brew`, `launchctl` | No |
 | `BrewUpdates/AppModel.swift` | The single shared state object the screens read, and the actions (run, stop, pin, exclude) | No (but drives the UI) |
 | `BrewUpdates/AppModel+Packages.swift` | Restore and uninstall: brew commands run with live output while holding the run lock | No |
@@ -424,6 +424,16 @@ The Security chart fixes its axes instead of letting Charts fit them to the data
 (every 6 hours, week or 2 months for the other ranges), and `.chartYScale(domain: 0...max)`
 starts at zero so a drop looks as big as it really is.
 
+The chart has one line per scanner: `.foregroundStyle(by: .value("Scanner", ...))` splits the
+marks into series and adds a legend, and `.chartForegroundStyleScale` picks each series' colour.
+It lives in its own view, `SecurityTrendChart`, because SwiftLint caps a view's length. A child
+view can read the same `AppModel` from the environment, so it needs no parameters.
+
+Scan Now runs both scanners at once with `async let` (`SecurityScanModel.scanNow`): each
+`async let` starts a child task immediately, and awaiting them together takes as long as the
+slower one. Each scan's error is captured instead of thrown, so one failing doesn't lose the
+other's result.
+
 The range (24 Hours, 7 Days, 30 Days, 1 Year, All) comes from a `Picker` with
 `.pickerStyle(.segmented)`, bound to a `@State` `TrendRange` enum. Its date math lives in
 `Models/TrendRange.swift` so it can be unit-tested without the view. The axis marks are
@@ -500,8 +510,8 @@ enable and disable themselves as runs start and finish.
   The dialog warns if another installed formula still needs the package; brew refuses to
   remove those anyway. Try it on something small you can reinstall, like `brew install cowsay`.
 - **Links**: with the app running, try `open "brewupdates://installed"` in Terminal.
-- **Security → Scan Now** (⇧⌘S) runs grype read-only (about 20 seconds) and shows the result
-  as the newest scan. Findings for packages you've uninstalled since a scan are hidden.
+- **Security → Scan Now** (⇧⌘S) runs grype and `brew vulns` read-only, at the same time (about
+  20 seconds, grype being the slow one), and shows the result as the newest scan. Findings for packages you've uninstalled since a scan are hidden.
 - **Doctor** only reads logs. **Check Now** (⇧⌘D) runs `brew doctor`, which changes nothing.
   Suggested fixes are only copied to the clipboard; you run them yourself in Terminal.
 

@@ -72,7 +72,8 @@ struct UpdateSettingsView: View {
     private var securitySection: some View {
         Section {
             Toggle("Scan installed packages for vulnerabilities (grype)", isOn: $draft.securityScanEnabled)
-            LabeledContent("Report") {
+            Toggle("Check formulae against OSV.dev (brew vulns)", isOn: $draft.vulnsScanEnabled)
+            LabeledContent("Show in run logs") {
                 HStack(spacing: 4) {
                     ForEach(ConfigDraft.scanSeverities) { severity in
                         Toggle(severity.rawValue, isOn: severityBinding(severity))
@@ -81,11 +82,12 @@ struct UpdateSettingsView: View {
                     }
                 }
             }
-            .disabled(!draft.securityScanEnabled)
+            .disabled(!draft.securityScanEnabled && !draft.vulnsScanEnabled)
         } header: {
             Text("Security")
         } footer: {
-            Text("Needs grype: brew install --cask grype")
+            Text("grype needs: brew install --cask grype. brew vulns needs nothing extra. "
+                + "Severities only change what run logs list; reports keep every level.")
                 .foregroundStyle(.secondary)
         }
     }

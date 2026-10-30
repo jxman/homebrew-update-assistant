@@ -192,6 +192,9 @@ private struct RunSummaryHeader: View {
                 Pill(text: "exit \(summary.exitCode)", color: summary.exitCode == 0 ? .green : .red)
                 Pill(text: "doctor: \(summary.doctor.status)")
                 Pill(text: "security: \(summary.security.status)")
+                if let vulns = summary.vulns {
+                    Pill(text: "brew vulns: \(vulns.status)")
+                }
                 Pill(text: "cleanup: \(summary.cleanup.status)")
             }
             packageLine("Upgraded", summary.upgraded.all.map { "\($0.name) \($0.from) → \($0.to)" }, color: .green)
@@ -202,6 +205,19 @@ private struct RunSummaryHeader: View {
             packageLine("Excluded", summary.skipped.excluded, color: .secondary)
             packageLine("Pinned", summary.skipped.pinned, color: .secondary)
             packageLine("Not outdated", summary.skipped.notOutdated, color: .secondary)
+            // Checked before upgrading: which upgrades replace a version with known vulnerabilities
+            packageLine(
+                "Vulnerable",
+                summary.vulns?.beforeUpgrade.map { "\($0.name) (\($0.vulnerabilityCount))" } ?? [],
+                color: .orange
+            )
+            if let deprecations = summary.deprecations {
+                packageLine(
+                    "Deprecated",
+                    (deprecations.formulae + deprecations.casks).map { "\($0.name)\($0.disabled ? " (disabled)" : "")" },
+                    color: .orange
+                )
+            }
         }
         .font(.callout)
     }

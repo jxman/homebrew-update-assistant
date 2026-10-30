@@ -48,6 +48,49 @@ struct RunSummary: Codable, Sendable, Equatable {
         let vulnerabilityCount: Int
     }
 
+    /// The `brew vulns` step (script 2.4.0+)
+    struct Vulns: Codable, Sendable, Equatable {
+        struct BySeverity: Codable, Sendable, Equatable {
+            let critical: Int
+            let high: Int
+            let medium: Int
+            let low: Int
+            let unknown: Int
+        }
+
+        /// An outdated formula with findings in its installed version, checked before upgrading
+        struct Outdated: Codable, Sendable, Equatable {
+            let name: String
+            let vulnerabilityCount: Int
+        }
+
+        let status: String
+        let findingCount: Int
+        let formulaCount: Int
+        let bySeverity: BySeverity
+        let checked: Int
+        let skipped: Int
+        let complete: Bool
+        let beforeUpgrade: [Outdated]
+    }
+
+    /// An installed package Homebrew has deprecated or disabled (script 2.4.0+)
+    struct Deprecation: Codable, Sendable, Hashable {
+        let name: String
+        let disabled: Bool
+        /// When it was or will be disabled (or deprecated), `YYYY-MM-DD`
+        let date: String?
+        /// A symbol such as `deprecated_upstream`, or free text
+        let reason: String?
+        let replacement: String?
+    }
+
+    struct Deprecations: Codable, Sendable, Equatable {
+        let status: String
+        let formulae: [Deprecation]
+        let casks: [Deprecation]
+    }
+
     struct Files: Codable, Sendable, Equatable {
         let log: String?
         let upgradesLog: String?
@@ -55,6 +98,7 @@ struct RunSummary: Codable, Sendable, Equatable {
         let securityLog: String?
         let securityDetailedLog: String?
         let securityJson: String?
+        let vulnsJson: String?
     }
 
     static let supportedSchemaVersion = 1
@@ -78,6 +122,10 @@ struct RunSummary: Codable, Sendable, Equatable {
     let backup: Backup
     let doctor: StepStatus
     let security: Security
+    /// nil in summaries from scripts before 2.4.0. Optional properties decode as nil when the
+    /// key is missing, so older files still load.
+    let vulns: Vulns?
+    let deprecations: Deprecations?
     let cleanup: StepStatus
     let files: Files
 
@@ -88,6 +136,36 @@ struct RunSummary: Codable, Sendable, Equatable {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(RunSummary.self, from: data)
+    }
+}
+
+extension RunSummary {
+    /// Why this run has no report from a scanner, as a sentence fragment, from that step's status
+    func missingReportReason(_ source: VulnerabilitySource) -> String {
+        source == .grype ? Self.grypeMissingReason(security.status) : Self.brewVulnsMissingReason(vulns?.status)
+    }
+
+    private static func grypeMissingReason(_ status: String) -> String {
+        switch status {
+        case "dry_run": "it was a dry run, and dry runs skip grype"
+        case "disabled": "grype scanning is turned off in Settings"
+        case "unavailable": "grype isn't installed (brew install --cask grype)"
+        case "skipped": "the run used --skip-security-scan"
+        case "failed": "grype didn't produce a report; see the run's log"
+        default: "the run ended before the scan"
+        }
+    }
+
+    /// nil: the summary has no `vulns` object
+    private static func brewVulnsMissingReason(_ status: String?) -> String {
+        switch status {
+        case nil: "it ran a script older than 2.4.0"
+        case "disabled": "brew vulns is turned off in Settings"
+        case "unavailable": "jq or brew vulns isn't available; see the run's log"
+        case "skipped": "the run used --skip-security-scan"
+        case "failed": "brew vulns didn't produce a report; see the run's log"
+        default: "the run ended before the scan"
+        }
     }
 }
 

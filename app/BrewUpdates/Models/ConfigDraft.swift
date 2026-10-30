@@ -13,7 +13,8 @@ struct ConfigDraft: Sendable, Equatable {
     var skipCasksByDefault = false
     var cleanupByDefault = true
     var notificationsEnabled = false
-    var securityScanEnabled = false
+    var securityScanEnabled = true
+    var vulnsScanEnabled = true
     var securitySeverities: Set<Severity> = [.high, .critical]
     var excludedFormulae: [String] = []
     var excludedCasks: [String] = []
@@ -28,6 +29,7 @@ struct ConfigDraft: Sendable, Equatable {
         cleanupByDefault = values["CLEANUP_BY_DEFAULT"].flatMap(Self.bool) ?? cleanupByDefault
         notificationsEnabled = values["ENABLE_NOTIFICATIONS"].flatMap(Self.bool) ?? notificationsEnabled
         securityScanEnabled = values["SECURITY_SCAN_ENABLED"].flatMap(Self.bool) ?? securityScanEnabled
+        vulnsScanEnabled = values["VULNS_SCAN_ENABLED"].flatMap(Self.bool) ?? vulnsScanEnabled
         let severityList = #/(LOW|MEDIUM|HIGH|CRITICAL)(,(LOW|MEDIUM|HIGH|CRITICAL))*/#
         if let raw = values["SECURITY_SCAN_SEVERITY"], raw.wholeMatch(of: severityList) != nil {
             securitySeverities = Set(raw.split(separator: ",").map { Severity(grype: String($0)) })
@@ -49,6 +51,7 @@ struct ConfigDraft: Sendable, Equatable {
                 .filter(securitySeverities.contains)
                 .map { $0.rawValue.uppercased() }
                 .joined(separator: ","),
+            "VULNS_SCAN_ENABLED": String(vulnsScanEnabled),
             "EXCLUDED_FORMULAE": excludedFormulae.joined(separator: " "),
             "EXCLUDED_CASKS": excludedCasks.joined(separator: " ")
         ]
@@ -66,7 +69,7 @@ struct ConfigDraft: Sendable, Equatable {
     var validationError: String? {
         if maxBackupCount < 1 { return "Keep at least 1 Brewfile backup." }
         if logRetentionDays < 1 { return "Keep logs for at least 1 day." }
-        if securityScanEnabled && securitySeverities.isEmpty { return "Choose at least one severity to report." }
+        if (securityScanEnabled || vulnsScanEnabled) && securitySeverities.isEmpty { return "Choose at least one severity to report." }
         if let bad = (excludedFormulae + excludedCasks).first(where: { !BrewConfig.isValidExclusionName($0) }) {
             return "\"\(bad)\" isn't a valid package name for the exclusion list."
         }

@@ -10,7 +10,9 @@ import Observation
 final class SecurityScanModel {
     struct Scan: Sendable {
         let date: Date
-        let vulnerabilities: [Vulnerability]
+        /// nil when that scanner failed (the reason is in `scanError`)
+        let grype: [Vulnerability]?
+        let brewVulns: BrewVulnsReport?
     }
 
     private(set) var latest: Scan?
@@ -23,15 +25,36 @@ final class SecurityScanModel {
         self.scanner = scanner
     }
 
-    func scanNow() async {
-        guard !isScanning else { return }
+    /// Runs both scanners at once. Returns true when at least one produced a report; a
+    /// scanner that failed is reported in `scanError` without discarding the other's result.
+    @discardableResult
+    func scanNow() async -> Bool {
+        guard !isScanning else { return false }
         isScanning = true
         defer { isScanning = false }
+
+        // `async let` starts each scan as a child task straight away; the `await`s below
+        // wait for both, so the total time is that of the slower one (grype)
+        let scanner = scanner
+        async let grypeScan = Self.capture { try await scanner.scan() }
+        async let brewVulnsScan = Self.capture { try await scanner.scanBrewVulns() }
+        let (grype, brewVulns) = await (grypeScan, brewVulnsScan)
+
+        let errors = [grype.error, brewVulns.error].compactMap { $0?.localizedDescription }
+        scanError = errors.isEmpty ? nil : errors.joined(separator: "\n")
+        guard grype.value != nil || brewVulns.value != nil else { return false }
+        latest = Scan(date: .now, grype: grype.value, brewVulns: brewVulns.value)
+        return true
+    }
+
+    /// A throwing scan's value or error, so one failing scanner doesn't cancel the other
+    private static func capture<T: Sendable>(
+        _ work: @Sendable () async throws -> T
+    ) async -> (value: T?, error: (any Error)?) {
         do {
-            latest = Scan(date: .now, vulnerabilities: try await scanner.scan())
-            scanError = nil
+            return (try await work(), nil)
         } catch {
-            scanError = error.localizedDescription
+            return (nil, error)
         }
     }
 }

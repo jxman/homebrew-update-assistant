@@ -55,6 +55,10 @@ struct RunStore: Sendable {
         try Vulnerability.parseGrypeReport(try Data(contentsOf: url))
     }
 
+    func loadBrewVulnsReport(at url: URL) async throws -> BrewVulnsReport {
+        try Vulnerability.parseBrewVulnsReport(try Data(contentsOf: url))
+    }
+
     /// PID from the script's run lock, if that process is still alive.
     static func lockHolderPID(paths: AppPaths) -> Int32? {
         guard let text = try? String(contentsOf: paths.lockPIDFile, encoding: .utf8),

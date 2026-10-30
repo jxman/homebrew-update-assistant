@@ -1,32 +1,45 @@
-import Charts
 import SwiftUI
 
-/// Vulnerabilities from a run's grype report (or a Scan Now), with severity filters and a trend chart.
+/// Vulnerabilities from a run's grype and brew vulns reports (or a Scan Now), with severity
+/// and scanner filters and a trend chart.
 struct SecurityView: View {
     @Environment(AppModel.self) private var model
 
     @State private var selectedRunID: Run.ID?
-    @State private var vulnerabilities: [Vulnerability] = []
+    /// The selected run's reports; nil when it has none from that scanner
+    @State private var grypeFindings: [Vulnerability]?
+    @State private var brewVulnsReport: BrewVulnsReport?
+    /// Set when the selected run had no report from that scanner and its newest one is shown instead
+    @State private var grypeFallback: Run?
+    @State private var brewVulnsFallback: Run?
+    /// nil shows both scanners, matched up by `Vulnerability.combine`
+    @State private var scanner: VulnerabilitySource?
     @State private var isLoading = false
     @State private var loadError: String?
     @State private var severities: Set<Severity> = [.critical, .high]
     @State private var searchText = ""
     @State private var sortOrder = [KeyPathComparator(\Vulnerability.severity)]
-    /// Counts read from `*.security.log` for runs without a summary (before script v2.2.0)
-    @State private var logCounts: [Run.ID: Int] = [:]
     /// Also list findings for formulae uninstalled since the scan
     @State private var showsRemoved = false
-    /// How far back the trend chart looks
-    @State private var trendRange = TrendRange.week
 
     /// Picker tag for the in-memory Scan Now result (run IDs are dates, so this can't clash)
     private static let manualScanID = "scan-now"
 
     private var isShowingManualScan: Bool { selectedRunID == Self.manualScanID }
 
-    /// The selected report: a run's saved scan, or the latest Scan Now
+    /// The selected scan's reports: a run's saved ones, or the latest Scan Now
+    private var reports: (grype: [Vulnerability]?, brewVulns: BrewVulnsReport?) {
+        if isShowingManualScan {
+            return (model.security.latest?.grype, model.security.latest?.brewVulns)
+        }
+        return (grypeFindings, brewVulnsReport)
+    }
+
+    /// Both scanners' findings, limited to the chosen scanner
     private var allFindings: [Vulnerability] {
-        isShowingManualScan ? model.security.latest?.vulnerabilities ?? [] : vulnerabilities
+        let combined = Vulnerability.combine(grype: reports.grype ?? [], brewVulns: reports.brewVulns?.findings ?? [])
+        guard let scanner else { return combined }
+        return combined.filter { $0.sources.contains(scanner) }
     }
 
     /// Findings split by whether their formula is still installed. Until the package list has
@@ -43,9 +56,15 @@ struct SecurityView: View {
 
     private var removedPackages: Set<String> { Set(partitioned.removed.map(\.homebrewPackage)) }
 
-    /// Runs that produced a JSON security report
+    /// Runs that produced a JSON report from either scanner
     private var scannedRuns: [Run] {
-        model.runs.filter { $0.files[.securityJSON] != nil }
+        model.runs.filter { $0.files[.securityJSON] != nil || $0.files[.vulnsJSON] != nil }
+    }
+
+    /// The newest run with grype results, as before brew vulns existed: dry runs only have brew
+    /// vulns's, and opening on one would hide the last full scan. Any scan if none has grype.
+    private var defaultRunID: Run.ID? {
+        (scannedRuns.first { $0.files[.securityJSON] != nil } ?? scannedRuns.first)?.id
     }
 
     private var rows: [Vulnerability] {
@@ -54,7 +73,7 @@ struct SecurityView: View {
             .filter { searchText.isEmpty
                 || $0.homebrewPackage.localizedCaseInsensitiveContains(searchText)
                 || $0.component.localizedCaseInsensitiveContains(searchText)
-                || $0.advisoryID.localizedCaseInsensitiveContains(searchText) }
+                || $0.identifiers.contains { $0.localizedCaseInsensitiveContains(searchText) } }
             .sorted(using: sortOrder)
     }
 
@@ -74,7 +93,10 @@ struct SecurityView: View {
                             .tag(Optional(Self.manualScanID))
                     }
                     ForEach(scannedRuns) { run in
-                        Text(run.date.formatted(date: .abbreviated, time: .shortened)).tag(Optional(run.id))
+                        // Dry runs skip grype, so say which ones only have brew vulns results
+                        Text(run.date.formatted(date: .abbreviated, time: .shortened)
+                            + (run.files[.securityJSON] == nil ? " (dry run, brew vulns only)" : ""))
+                            .tag(Optional(run.id))
                     }
                 }
                 .frame(minWidth: 200)
@@ -82,8 +104,8 @@ struct SecurityView: View {
             ToolbarItem {
                 Button {
                     Task {
-                        await model.security.scanNow()
-                        if model.security.scanError == nil {
+                        // Show the new scan even if one of the two scanners failed
+                        if await model.security.scanNow() {
                             selectedRunID = Self.manualScanID
                         }
                     }
@@ -93,24 +115,35 @@ struct SecurityView: View {
                 // Scanning while packages are being upgraded would read a half-changed Cellar
                 .disabled(model.security.isScanning || model.isRunInProgress)
                 .keyboardShortcut("s", modifiers: [.command, .shift])
-                .help("Scan installed packages with grype now, like a run's security step (⇧⌘S)")
+                .help("Scan installed packages with grype and brew vulns now, like a run's security steps (⇧⌘S)")
             }
         }
         .onAppear {
             // Start from the severities the script is configured to report
             severities = model.config.securitySeverities
             if selectedRunID == nil {
-                selectedRunID = model.security.latest == nil ? scannedRuns.first?.id : Self.manualScanID
+                selectedRunID = model.security.latest == nil ? defaultRunID : Self.manualScanID
             }
         }
         // Reload whenever a different scan is picked
         .task(id: selectedRunID) { await loadReport() }
-        .task(id: runsNeedingLogCounts.map(\.id)) { await loadLogCounts() }
     }
 
     private var header: some View {
         HStack(alignment: .top, spacing: 24) {
             VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Scanner").font(.headline)
+                    Picker("Scanner", selection: $scanner) {
+                        Text("Both").tag(VulnerabilitySource?.none)
+                        ForEach(VulnerabilitySource.allCases) { source in
+                            Text(source.title).tag(Optional(source))
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                }
                 Text("Severity").font(.headline)
                 HStack {
                     ForEach(Severity.allCases) { severity in
@@ -121,11 +154,13 @@ struct SecurityView: View {
                         .tint(severity.color)
                     }
                 }
-                Text("\(Set(rows.map(\.homebrewPackage)).count) Homebrew packages affected")
+                Text("\(Set(rows.map(\.homebrewPackage)).count) Homebrew packages affected"
+                    + (hiddenBySeverity > 0 ? " · \(hiddenBySeverity) more findings hidden by the severity filter" : ""))
                     .foregroundStyle(.secondary)
                 if !removedPackages.isEmpty {
                     removedNote
                 }
+                coverageNote
                 if model.security.isScanning {
                     ProgressView("Scanning installed packages… this can take up to a minute").controlSize(.small)
                 }
@@ -137,7 +172,7 @@ struct SecurityView: View {
             // Shown whenever any run has scanned, so the range picker stays reachable even
             // when the chosen range has no scans in it
             if hasScanHistory {
-                trendChart
+                SecurityTrendChart()
             }
         }
     }
@@ -157,99 +192,60 @@ struct SecurityView: View {
         .font(.callout)
     }
 
+    /// What the selected scan covered: brew vulns skips some formulae and all casks, and older
+    /// runs (or a scanner that isn't installed) have only one of the two reports
+    @ViewBuilder
+    private var coverageNote: some View {
+        let (grype, brewVulns) = reports
+        if scanner != .grype, let brewVulns {
+            Text("brew vulns checked \(brewVulns.checkedCount) formulae and skipped \(brewVulns.skippedFormulae.count) "
+                + "without a supported source URL. It doesn't scan casks.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .help(brewVulns.skippedFormulae.isEmpty ? "" : "Skipped: " + brewVulns.skippedFormulae.joined(separator: ", "))
+        }
+        if scanner != .grype, let run = brewVulnsFallback {
+            fallbackNote(.brewVulns, from: run)
+        }
+        if scanner != .brewVulns, let run = grypeFallback {
+            fallbackNote(.grype, from: run)
+        }
+        if scanner != .grype, brewVulns == nil {
+            Text("No brew vulns results: \(missingReason(.brewVulns)).")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        if scanner != .brewVulns, grype == nil {
+            Text("No grype results: \(missingReason(.grype)).")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func fallbackNote(_ source: VulnerabilitySource, from run: Run) -> some View {
+        Text("\(source.title) results are from \(run.date.formatted(date: .abbreviated, time: .shortened)): "
+            + "this run has none, because \(missingReason(source)).")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+    }
+
+    /// Why the selected scan lacks a scanner's report: from the run's summary, or for Scan Now,
+    /// because that scanner failed (its error is shown above)
+    private func missingReason(_ source: VulnerabilitySource) -> String {
+        if isShowingManualScan { return "it failed during Scan Now" }
+        guard let summary = model.run(withID: selectedRunID)?.summary else {
+            return "this run is from a script older than 2.4.0"
+        }
+        return summary.missingReportReason(source)
+    }
+
+    /// Findings the severity buttons hide, so an empty table can say so
+    private var hiddenBySeverity: Int {
+        searchText.isEmpty ? visibleFindings.count { !severities.contains($0.severity) } : 0
+    }
+
     private var hasScanHistory: Bool {
         model.runs.contains { $0.summary?.security != nil || $0.files[.security] != nil }
-    }
-
-    /// Runs inside the chosen range (all of them for All)
-    private var recentRuns: [Run] {
-        guard let start = trendRange.start() else { return model.runs }
-        return model.runs.filter { $0.date >= start }
-    }
-
-    /// Older runs have no summary, only the scan's text report
-    private var runsNeedingLogCounts: [Run] {
-        recentRuns.filter { $0.summary == nil && $0.files[.security] != nil }
-    }
-
-    /// Vulnerability counts over the chosen range, oldest first: from run summaries, or counted
-    /// from the text report for runs from before summaries existed
-    private var trend: [(date: Date, count: Int)] {
-        recentRuns
-            .compactMap { run in
-                if let security = run.summary?.security {
-                    return security.status == "completed" ? (run.date, security.vulnerabilityCount) : nil
-                }
-                return logCounts[run.id].map { (run.date, $0) }
-            }
-            .reversed()
-    }
-
-    private var trendChart: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // A segmented picker: each case of the enum is one segment, and choosing one sets
-            // `trendRange`, which re-renders the chart with the new span
-            Picker("Range", selection: $trendRange) {
-                ForEach(TrendRange.allCases) { range in
-                    Text(range.rawValue).tag(range)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
-            .frame(width: 380)
-            Chart(trend, id: \.date) { point in
-                LineMark(x: .value("Date", point.date), y: .value("Vulnerabilities", point.count))
-                // Dots on every run would run together over a year of runs, so only the line then
-                if trend.count <= 60 {
-                    PointMark(x: .value("Date", point.date), y: .value("Vulnerabilities", point.count))
-                        .symbolSize(20)
-                }
-            }
-            .chartYAxisLabel("Findings")
-            // A fixed span, so the chart always covers the whole range however many runs there were
-            .chartXScale(domain: trendRange.domain(oldest: trend.first?.date))
-            .chartXAxis { trendAxis }
-            // Start at zero so a drop (e.g. after upgrading) looks as big as it is
-            .chartYScale(domain: 0...max(1, trend.map(\.count).max() ?? 0))
-            .overlay {
-                if trend.isEmpty {
-                    Text("No scans in this range").font(.callout).foregroundStyle(.secondary)
-                }
-            }
-            .frame(width: 380, height: 110)
-        }
-    }
-
-    /// One labelled tick per hour block, day, week or month, depending on the range.
-    /// `@AxisContentBuilder` lets the `switch` return different axis marks per case.
-    @AxisContentBuilder
-    private var trendAxis: some AxisContent {
-        switch trendRange {
-        case .day:
-            AxisMarks(values: .stride(by: .hour, count: 6)) {
-                AxisGridLine()
-                AxisValueLabel(format: .dateTime.hour())
-            }
-        case .week:
-            AxisMarks(values: .stride(by: .day)) {
-                AxisGridLine()
-                AxisValueLabel(format: .dateTime.weekday(.abbreviated), centered: true)
-            }
-        case .month:
-            AxisMarks(values: .stride(by: .day, count: 7)) {
-                AxisGridLine()
-                AxisValueLabel(format: .dateTime.month(.abbreviated).day())
-            }
-        case .year:
-            AxisMarks(values: .stride(by: .month, count: 2)) {
-                AxisGridLine()
-                AxisValueLabel(format: .dateTime.month(.abbreviated))
-            }
-        case .all:
-            // Any length of history: let Charts pick the ticks
-            AxisMarks()
-        }
     }
 
     @ViewBuilder
@@ -258,7 +254,7 @@ struct SecurityView: View {
             EmptyStateView(
                 title: "No security scans",
                 systemImage: "lock.shield",
-                message: "Runs scan when SECURITY_SCAN_ENABLED is on and grype is installed. Click Scan Now to scan straight away."
+                message: "Runs scan with grype (when it's installed) and brew vulns. Click Scan Now to scan straight away."
             )
         } else if isLoading && !isShowingManualScan {
             ProgressView("Reading scan…").frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -279,7 +275,7 @@ struct SecurityView: View {
                 TableColumn("Component", value: \.component)
                 TableColumn("Installed", value: \.installedVersion)
                 TableColumn("Fixed In") { item in
-                    Text(item.fixVersions.isEmpty ? "—" : item.fixVersions.joined(separator: ", "))
+                    Text(item.fixVersionsText)
                 }
                 // `value:` needs a Comparable, so sort on a non-optional key (no date sorts last).
                 // `.help` is the hover tooltip: the exact day behind the short age.
@@ -292,10 +288,27 @@ struct SecurityView: View {
                 }
                 .width(min: 70, ideal: 80)
                 TableColumn("Advisory", value: \.advisoryID) { item in
-                    if let url = item.advisoryURL {
-                        Link(item.advisoryID, destination: url)
-                    } else {
-                        Text(item.advisoryID)
+                    Group {
+                        if let url = item.advisoryURL {
+                            Link(item.advisoryID, destination: url)
+                        } else {
+                            Text(item.advisoryID)
+                        }
+                    }
+                    .help(item.aliases.isEmpty ? item.summary ?? "" : "Also known as " + item.aliases.joined(separator: ", "))
+                }
+                TableColumn("Found By", value: \.sourcesText)
+                    .width(min: 70, ideal: 110)
+            }
+            // An empty table looks like a clean scan, so say when the filter is the reason
+            .overlay {
+                if rows.isEmpty && hiddenBySeverity > 0 {
+                    ContentUnavailableView {
+                        Label("\(hiddenBySeverity) findings hidden", systemImage: "line.3.horizontal.decrease.circle")
+                    } description: {
+                        Text("None of this scan's findings match the selected severities.")
+                    } actions: {
+                        Button("Show All Severities") { severities = Set(Severity.allCases) }
                     }
                 }
             }
@@ -315,27 +328,31 @@ struct SecurityView: View {
         )
     }
 
-    private func loadLogCounts() async {
-        let store = RunStore(paths: model.paths)
-        for run in runsNeedingLogCounts where logCounts[run.id] == nil {
-            guard let url = run.files[.security] else { continue }
-            logCounts[run.id] = try? await store.vulnerabilityCount(at: url)
-        }
-    }
-
     private func loadReport() async {
-        // A Scan Now result is already in memory (`allFindings` reads it)
-        guard let run = model.run(withID: selectedRunID), let url = run.files[.securityJSON] else {
-            vulnerabilities = []
-            return
-        }
+        grypeFindings = nil
+        brewVulnsReport = nil
+        grypeFallback = nil
+        brewVulnsFallback = nil
+        loadError = nil
+        // A Scan Now result is already in memory (`reports` reads it)
+        guard let run = model.run(withID: selectedRunID) else { return }
         isLoading = true
         defer { isLoading = false }
+        let store = RunStore(paths: model.paths)
+        // A run without one scanner's report (a dry run has no grype; runs before script 2.4.0
+        // have no brew vulns) borrows that scanner's newest report, so both always show
+        let grypeRun = run.files[.securityJSON] != nil ? run : model.runs.first { $0.files[.securityJSON] != nil }
+        let brewVulnsRun = run.files[.vulnsJSON] != nil ? run : model.runs.first { $0.files[.vulnsJSON] != nil }
         do {
-            vulnerabilities = try await RunStore(paths: model.paths).loadVulnerabilities(at: url)
-            loadError = nil
+            if let grypeRun, let url = grypeRun.files[.securityJSON] {
+                grypeFindings = try await store.loadVulnerabilities(at: url)
+                grypeFallback = grypeRun.id == run.id ? nil : grypeRun
+            }
+            if let brewVulnsRun, let url = brewVulnsRun.files[.vulnsJSON] {
+                brewVulnsReport = try await store.loadBrewVulnsReport(at: url)
+                brewVulnsFallback = brewVulnsRun.id == run.id ? nil : brewVulnsRun
+            }
         } catch {
-            vulnerabilities = []
             loadError = error.localizedDescription
         }
     }

@@ -8,9 +8,10 @@ struct BrewConfig: Sendable, Equatable {
     var excludedFormulae: Set<String> { words(for: "EXCLUDED_FORMULAE") }
     var excludedCasks: Set<String> { words(for: "EXCLUDED_CASKS") }
 
-    var securityScanEnabled: Bool { values["SECURITY_SCAN_ENABLED"] == "true" }
+    /// On unless set to false (the script's default since 2.4.0)
+    var securityScanEnabled: Bool { values["SECURITY_SCAN_ENABLED"] != "false" }
 
-    /// Severities the script is configured to report (default HIGH,CRITICAL, like the script)
+    /// Lowest severities the script shows in its logs (default HIGH,CRITICAL, like the script)
     var securitySeverities: Set<Severity> {
         let raw = values["SECURITY_SCAN_SEVERITY"] ?? "HIGH,CRITICAL"
         return Set(raw.split(separator: ",").map { Severity(grype: String($0)) })

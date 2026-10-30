@@ -146,13 +146,17 @@ enum HelpTopic: String, CaseIterable, Identifiable {
                 + "cancels it cleanly, like pressing Ctrl-C, and the run is recorded as cancelled."
         ]
         case .security: [
-            "Vulnerabilities that grype found in installed packages and that already have a fix. "
-                + "Most are in libraries bundled inside a formula (for example Ruby gems inside "
-                + "cocoapods), so upgrading that formula is usually the fix.",
-            "The chart shows how the count changes over time; pick a range above it. "
-                + "**Fix Available** shows how long a fixed version has been out.",
-            "**Scan Now** (⇧⌘S) runs a fresh scan. Its result is shown but not saved. Scans need "
-                + "grype (`brew install --cask grype`) and scanning turned on in Settings."
+            "Vulnerabilities from two scanners. **grype** looks at the files in each package and finds "
+                + "libraries bundled inside a formula (for example Ruby gems inside cocoapods); it only "
+                + "lists ones that already have a fix. **brew vulns** looks up each formula's own source in "
+                + "OSV.dev and also lists ones with no fix yet, but skips casks and some tap formulae.",
+            "**Scanner** shows either one or both. **Found By** says which scanner reported each row; "
+                + "a finding both reported (matched by advisory ID or alias) appears once.",
+            "The chart shows each scanner's count over time; pick a range above it. They count different "
+                + "things, so compare their trends, not their heights. **Fix Available** shows how long a "
+                + "fixed version has been out (grype only).",
+            "**Scan Now** (⇧⌘S) runs both scans. Its result is shown but not saved. grype needs "
+                + "`brew install --cask grype`."
         ]
         case .doctor: [
             "The warnings from `brew doctor`, explained in plain language, with suggested fixes. "
@@ -194,8 +198,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
                 + "holds the run lock. Wait for it to finish; a stale lock clears itself.",
             "**A run failed:** open it in Runs and read the log. Failures from network problems are "
                 + "retried automatically; a full disk needs at least 1 GB free.",
-            "**No security results:** install grype with `brew install --cask grype` and turn on scanning "
-                + "in Settings → Updates.",
+            "**No security results:** check that scanning is on in Settings → Updates, and install grype "
+                + "with `brew install --cask grype`. brew vulns results need the script from 2.4.0 on.",
             "**No notifications:** allow them for terminal-notifier (or Script Editor) in System "
                 + "Settings → Notifications, and check Focus mode."
         ]

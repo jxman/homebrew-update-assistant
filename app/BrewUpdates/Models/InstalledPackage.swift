@@ -38,6 +38,8 @@ struct InstalledPackage: Identifiable, Sendable, Hashable {
     var appStatus: CaskAppStatus = .notChecked
     /// `brew uninstall` will probably ask for the administrator password (see `CaskApp`)
     var uninstallNeedsAdmin = false
+    /// Set when Homebrew has deprecated or disabled the package
+    var deprecation: PackageDeprecation?
 
     /// The app was deleted (or renamed) outside Homebrew; brew's record is all that's left
     var isAppMissing: Bool { appStatus == .missing }
@@ -112,7 +114,8 @@ struct InstalledPackage: Identifiable, Sendable, Hashable {
                 installedDate: installed?.time.map { Date(timeIntervalSince1970: TimeInterval($0)) },
                 autoUpdates: false,
                 runtimeDependencies: installed?.runtimeDependencies?.map(\.fullName) ?? [],
-                directDependencies: installed?.runtimeDependencies?.filter { $0.declaredDirectly == true }.map(\.fullName) ?? []
+                directDependencies: installed?.runtimeDependencies?.filter { $0.declaredDirectly == true }.map(\.fullName) ?? [],
+                deprecation: formula.lifecycle.deprecation
             )
         }
         let casks = info.casks.map { cask in
@@ -131,7 +134,8 @@ struct InstalledPackage: Identifiable, Sendable, Hashable {
                 installedDate: cask.installedTime.map { Date(timeIntervalSince1970: TimeInterval($0)) },
                 autoUpdates: cask.autoUpdates ?? false,
                 appCandidates: CaskApp.appCandidates(fromArtifacts: cask.artifacts ?? []),
-                uninstallNeedsAdmin: CaskApp.uninstallNeedsAdmin(artifacts: cask.artifacts ?? [])
+                uninstallNeedsAdmin: CaskApp.uninstallNeedsAdmin(artifacts: cask.artifacts ?? []),
+                deprecation: cask.lifecycle.deprecation
             )
         }
         return (formulae + casks).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
@@ -183,11 +187,27 @@ private struct BrewInfoDocument: Decodable {
         let installed: [Installed]
         let outdated: Bool
         let pinned: Bool
+        let lifecycle: Lifecycle
 
         enum CodingKeys: String, CodingKey {
             case name
             case fullName = "full_name"
             case desc, homepage, tap, versions, installed, outdated, pinned
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            name = try container.decode(String.self, forKey: .name)
+            fullName = try container.decode(String.self, forKey: .fullName)
+            desc = try container.decodeIfPresent(String.self, forKey: .desc)
+            homepage = try container.decodeIfPresent(String.self, forKey: .homepage)
+            tap = try container.decodeIfPresent(String.self, forKey: .tap)
+            versions = try container.decode(Versions.self, forKey: .versions)
+            installed = try container.decode([Installed].self, forKey: .installed)
+            outdated = try container.decode(Bool.self, forKey: .outdated)
+            pinned = try container.decode(Bool.self, forKey: .pinned)
+            // The deprecation keys sit next to the others, so decode them from the same object
+            lifecycle = try Lifecycle(from: decoder)
         }
     }
 
@@ -204,6 +224,7 @@ private struct BrewInfoDocument: Decodable {
         let outdated: Bool
         let autoUpdates: Bool?
         let artifacts: [JSONValue]?
+        let lifecycle: Lifecycle
 
         enum CodingKeys: String, CodingKey {
             case token
@@ -213,6 +234,66 @@ private struct BrewInfoDocument: Decodable {
             case outdated
             case autoUpdates = "auto_updates"
             case artifacts
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            token = try container.decode(String.self, forKey: .token)
+            fullToken = try container.decode(String.self, forKey: .fullToken)
+            name = try container.decode([String].self, forKey: .name)
+            desc = try container.decodeIfPresent(String.self, forKey: .desc)
+            homepage = try container.decodeIfPresent(String.self, forKey: .homepage)
+            tap = try container.decodeIfPresent(String.self, forKey: .tap)
+            version = try container.decode(String.self, forKey: .version)
+            installed = try container.decodeIfPresent(String.self, forKey: .installed)
+            installedTime = try container.decodeIfPresent(Int.self, forKey: .installedTime)
+            outdated = try container.decode(Bool.self, forKey: .outdated)
+            autoUpdates = try container.decodeIfPresent(Bool.self, forKey: .autoUpdates)
+            artifacts = try container.decodeIfPresent([JSONValue].self, forKey: .artifacts)
+            lifecycle = try Lifecycle(from: decoder)
+        }
+    }
+
+    /// `deprecated` / `disabled` and their details, the same keys for formulae and casks
+    struct Lifecycle: Decodable {
+        let deprecated: Bool?
+        let deprecationDate: String?
+        let deprecationReason: String?
+        let deprecationReplacementFormula: String?
+        let deprecationReplacementCask: String?
+        let disabled: Bool?
+        let disableDate: String?
+        let disableReason: String?
+        let disableReplacementFormula: String?
+        let disableReplacementCask: String?
+
+        enum CodingKeys: String, CodingKey {
+            case deprecated, disabled
+            case deprecationDate = "deprecation_date"
+            case deprecationReason = "deprecation_reason"
+            case deprecationReplacementFormula = "deprecation_replacement_formula"
+            case deprecationReplacementCask = "deprecation_replacement_cask"
+            case disableDate = "disable_date"
+            case disableReason = "disable_reason"
+            case disableReplacementFormula = "disable_replacement_formula"
+            case disableReplacementCask = "disable_replacement_cask"
+        }
+
+        /// Disabled wins: its date and reason are the ones that matter now
+        var deprecation: PackageDeprecation? {
+            if disabled == true {
+                return PackageDeprecation(
+                    isDisabled: true, date: disableDate, reason: disableReason,
+                    replacement: disableReplacementFormula ?? disableReplacementCask
+                )
+            }
+            if deprecated == true {
+                return PackageDeprecation(
+                    isDisabled: false, date: deprecationDate, reason: deprecationReason,
+                    replacement: deprecationReplacementFormula ?? deprecationReplacementCask
+                )
+            }
+            return nil
         }
     }
 }

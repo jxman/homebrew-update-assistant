@@ -85,10 +85,17 @@ final class AppModel {
 
     /// Problems the app finds itself, which brew doctor doesn't check
     var appDoctorIssues: [DoctorIssue] {
-        [DoctorIssue.missingCaskApps(in: installed), DoctorIssue.unreadableCasks(unreadableCasks)].compactMap { $0 }
+        [
+            DoctorIssue.missingCaskApps(in: installed),
+            DoctorIssue.unreadableCasks(unreadableCasks),
+            DoctorIssue.deprecatedPackages(in: installed, kind: .formula),
+            DoctorIssue.deprecatedPackages(in: installed, kind: .cask)
+        ].compactMap { $0 }
     }
     /// brew doctor's newest findings plus the app's own (sidebar badge and dashboard)
-    var doctorIssues: [DoctorIssue] { (doctor.latest?.report.issues ?? []) + appDoctorIssues }
+    var doctorIssues: [DoctorIssue] {
+        DoctorIssue.merging(report: doctor.latest?.report.issues ?? [], app: appDoctorIssues)
+    }
     var nextScheduledRun: Date? { isLaunchAgentLoaded == false ? nil : schedule?.nextRun(after: .now) }
 
     var isScriptOutdated: Bool {

@@ -8,6 +8,7 @@ enum RunFileKind: String, CaseIterable, Sendable, Identifiable {
     case security = "security.log"
     case securityDetailed = "security.detailed.log"
     case securityJSON = "security.json"
+    case vulnsJSON = "vulns.json"
     case summary = "summary.json"
 
     var id: String { rawValue }
@@ -20,6 +21,7 @@ enum RunFileKind: String, CaseIterable, Sendable, Identifiable {
         case .security: "Security"
         case .securityDetailed: "Security Details"
         case .securityJSON: "Security JSON"
+        case .vulnsJSON: "brew vulns JSON"
         case .summary: "Summary"
         }
     }
@@ -27,7 +29,7 @@ enum RunFileKind: String, CaseIterable, Sendable, Identifiable {
     /// Text logs worth showing in the log viewer (JSON files get dedicated views instead).
     var isViewableLog: Bool {
         switch self {
-        case .securityJSON, .summary: false
+        case .securityJSON, .vulnsJSON, .summary: false
         default: true
         }
     }
