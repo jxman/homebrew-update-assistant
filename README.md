@@ -18,6 +18,7 @@ A scheduled Bash script that keeps Homebrew updated, backed up, health-checked a
 - **Safety net.** Before every run it takes a Brewfile backup. Runs never overlap, network calls retry with backoff, and each step has its own exit code.
 - **Health and security reports.** Every run saves a `brew doctor` report, a [Grype](https://github.com/anchore/grype) vulnerability scan of the Cellar, a `brew vulns` (OSV.dev) scan of installed formulae, and a list of deprecated or disabled packages.
 - **Machine-readable results.** Each run writes a `*.summary.json` and sends a macOS notification that links back to the run.
+- **Housekeeping visibility.** The app shows what you can clean up: packages nothing needs any more, deprecated or disabled packages, and packages with security issues you might want to upgrade, replace or remove.
 - **Menu bar and window app.** The app shows runs, installed packages, Security and Doctor findings, and backups. From it you can update, dry run, upgrade, pin, exclude, uninstall, restore and edit the schedule.
 
 ## Contents
@@ -30,6 +31,7 @@ A scheduled Bash script that keeps Homebrew updated, backed up, health-checked a
 - [Security scanning](#security-scanning)
 - [Notifications](#notifications)
 - [The Brew Updates app](#the-brew-updates-app)
+  - [Finding what to clean up or replace](#finding-what-to-clean-up-or-replace)
 - [Data model: files on disk](#data-model-files-on-disk)
 - [Configuration](#configuration)
 - [Project structure](#project-structure)
@@ -269,6 +271,22 @@ When `terminal-notifier` is installed, clicking a notification opens the run in 
 ## The Brew Updates app
 
 A native SwiftUI app in [`app/`](app/) with a menu bar extra and a main window. It never upgrades packages itself. **Update All**, **Dry Run** and **Upgrade Selected** all launch the deployed script, so every run from the app gets the same backup, lock, logs and summary as a scheduled run.
+
+### Finding what to clean up or replace
+
+`brew upgrade` keeps packages current but doesn't tell you which ones you've stopped using, which Homebrew is retiring, or which carry security problems an upgrade won't fix. The app puts those in one place:
+
+| Question | Where the app answers it |
+| --- | --- |
+| What did I install myself, and when? | **Installed → Requested** lists only the packages you asked for (not dependencies), with the **Date Installed** column. Old tools you forgot about stand out here |
+| What's left over? | Selecting a formula shows what it was **installed for**. One that nothing installed needs any more is flagged as a leftover (what `brew autoremove` would remove) |
+| What is Homebrew retiring? | **Doctor** lists deprecated and disabled formulae and casks with the reason, the date and Homebrew's suggested replacement. Each run's summary lists them too. Deprecated packages still work but will be disabled; disabled ones can't be installed or upgraded |
+| Which packages have security issues? | **Security** lists findings per Homebrew package, including vulnerable libraries bundled inside it. Findings with a fix mean upgrade; findings from `brew vulns` with no fix yet, or that keep coming back, point to a package worth replacing or removing |
+| Which cask apps are gone? | **Doctor** flags casks whose app was deleted outside Homebrew, so the record can be cleared |
+
+From **Installed** you can then uninstall a selection. The app warns when another package still needs it and never uses `--ignore-dependencies` or `--zap`. Security scanning covers formulae only (command-line tools and libraries); neither scanner checks cask apps.
+
+### Screens
 
 | Screen | What it shows / does |
 | --- | --- |

@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grype versions without the date show "—"
 
 #### Changed
+- README: "Finding what to clean up or replace" explains how the app surfaces unused,
+  leftover, deprecated and vulnerable packages
 - README: new screenshots and tour GIF of the current app; app table, security section and
   Known constraints updated (dry-run scans, sidebar footer, Grype false positives)
 - Help: Dashboard, Runs, Security, Doctor and Settings pages cover the second scanner, the
