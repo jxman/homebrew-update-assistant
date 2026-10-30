@@ -244,6 +244,7 @@ flowchart LR
 
 - Grype runs when `SECURITY_SCAN_ENABLED=true` (the default) and grype is installed. `brew vulns` runs when `VULNS_SCAN_ENABLED=true` (the default).
 - `SECURITY_SCAN_SEVERITY` sets the lowest level shown in the console and log for both scans (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`; default `HIGH,CRITICAL`). The reports and counts keep every level.
+- Both scans also run in dry runs (from 2.4.1): they only read what's installed, so every run has both reports.
 - Vulnerabilities are reported but never block the run. Before upgrading, the outdated formulae are checked with `brew vulns` and those with known vulnerabilities in the installed version are listed. Upgrades aren't held back: a vulnerable installed version is a reason to upgrade, and the new version's status is only known once it's installed. The scan after the upgrade shows what remains.
 - Deprecated and disabled formulae and casks come from `brew info --json=v2 --installed` and are listed in the run summary and on the app's Doctor screen.
 - `scripts/fix-vulnerabilities.sh` upgrades the formulae that usually carry the vulnerable dependencies, updates pip/urllib3, then scans again.
@@ -271,16 +272,17 @@ A native SwiftUI app in [`app/`](app/) with a menu bar extra and a main window. 
 
 | Screen | What it shows / does |
 | --- | --- |
-| Dashboard | Last run, outdated count, system and app version, open doctor issues |
+| Dashboard | Last run, schedule, outdated count, Grype and `brew vulns` counts side by side, open doctor issues, system and app versions. Numbers share one colour scale (green fine, orange worth a look, red fix soon) |
 | Installed | Formulae and casks with dependencies. Pin/unpin, exclude, upgrade selected, uninstall (dependency-aware). Cask apps found on disk; `auto_updates` casks show the app's own version |
 | Runs | Every run's summary and log, plus live output with Stop for runs started in the app |
-| Security | Latest scan findings, a trend chart with a date range, fix-available age, Scan Now |
-| Doctor | Each `brew doctor` warning explained with copyable fixes, history across runs, Check Now, plus the app's own checks (missing cask apps, unreadable casks) |
+| Security | Findings from either scanner or both (Found By column), severity filter that says what it hides, a per-scanner trend chart with a date range, fix-available age, Scan Now |
+| Doctor | Each `brew doctor` warning explained with copyable fixes, history across runs, Check Now, plus the app's own checks (missing cask apps, unreadable casks, deprecated or disabled packages with reason and replacement) |
 | Backups | Compare a Brewfile backup with what's installed or with the previous backup; restore missing taps, formulae and casks |
 | Settings (⌘,) | Schedule on/off, time and days, run flags (rewrites the plist, then reloads). Every `~/.brew_update_config` setting |
 | Menu bar / Dock | Warning icon after a failed run; Dock badge with the update count |
 | Run menu | Dry Run (⇧⌘U), Update All… (⌘U) and Stop (⌘.), also on the toolbar as separate Dry Run and Update All buttons |
-| Help | A separate Help window explaining each screen |
+| Help | A separate Help window (⌘?) explaining each screen |
+| Sidebar footer | App icon, app and script versions; click for About |
 
 ```mermaid
 sequenceDiagram
@@ -360,7 +362,7 @@ Exclusions match exact names (`node` doesn't exclude `node@20`), and pinned form
 
 ```text
 .
-├── brew-updates.command        # The update script (~1,700 lines)
+├── brew-updates.command        # The update script (~1,950 lines)
 ├── scripts/
 │   ├── setup.sh                # Deploy script to ~/bin, install/reload LaunchAgent (--reset-launchagent, --uninstall)
 │   ├── uninstall.sh            # Remove script + LaunchAgent; --logs/--backups/--config/--all, --dry-run
@@ -475,6 +477,7 @@ For anything else, run `--dry-run --verbose` and read the run's `.log` and `.doc
 - **Bash 3.2.** The LaunchAgent runs `/bin/bash`, so the script avoids associative arrays and `mapfile`.
 - **Self-updating casks are skipped.** `auto_updates` casks aren't upgraded or counted as outdated. The app shows the app's own version for them instead.
 - **Scans are snapshots.** The app hides findings for formulae that are no longer installed. Scan Now results aren't added to the trend chart.
+- **Scanner false positives.** Grype sometimes misreads Homebrew version numbers, e.g. it ranks ImageMagick's `7.1.2-34` below `7.1.2` and reports CVE-2023-5341 ([anchore/grype#3865](https://github.com/anchore/grype/issues/3865)). Hide a specific match with an `ignore:` rule (vulnerability + package name) in `~/.grype.yaml`, which Grype reads on every scan, and remove it once Grype is fixed.
 - **No bottle provenance check.** `brew verify <formula>` can check a bottle's build attestation, but it downloads the bottle and needs the GitHub CLI signed in, so runs don't call it. Use it by hand when you want to check a specific formula.
 - **Personal signing.** The app is signed with an Apple Development certificate (or ad hoc), not notarized, so a shared copy needs a one-time Gatekeeper override. See [Sharing with others](#sharing-with-others).
 

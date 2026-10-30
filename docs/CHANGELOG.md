@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grype versions without the date show "—"
 
 #### Changed
+- README: new screenshots and tour GIF of the current app; app table, security section and
+  Known constraints updated (dry-run scans, sidebar footer, Grype false positives)
 - Help: Dashboard, Runs, Security, Doctor and Settings pages cover the second scanner, the
   severity filter, deprecations, the new Dashboard layout and the sidebar footer; Troubleshooting
   explains hiding a scanner's false positive with `~/.grype.yaml`
