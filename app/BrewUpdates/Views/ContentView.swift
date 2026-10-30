@@ -15,6 +15,10 @@ struct ContentView: View {
                     .badge(badgeCount(for: section))
                     .tag(section)
             }
+            // `safeAreaInset` pins the footer below the list; the list scrolls above it
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                SidebarFooter()
+            }
             .navigationSplitViewColumnWidth(min: 170, ideal: 190)
         } detail: {
             VStack(spacing: 0) {

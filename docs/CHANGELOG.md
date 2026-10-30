@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### SwiftUI App
 
 #### Added
+- Sidebar footer with the app icon, name, app version and script version; click it for About
+- Dashboard: the Security card shows grype and brew vulns side by side, each with what it
+  counts. brew vulns is red with Critical or High findings, orange with lesser ones only
 - Security: brew vulns results next to grype's, with a **Scanner** picker (Both, Grype, brew
   vulns) and a **Found By** column. A finding both scanners report (same package, matching
   advisory ID or alias) is one row. A note says what the scan covered (formulae checked and
@@ -43,6 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grype versions without the date show "—"
 
 #### Changed
+- Help: Dashboard, Runs, Security, Doctor and Settings pages cover the second scanner, the
+  severity filter, deprecations, the new Dashboard layout and the sidebar footer; Troubleshooting
+  explains hiding a scanner's false positive with `~/.grype.yaml`
+- Dashboard: cards in 3, 2 or 1 columns by window width, so the six cards fill whole rows
+  (a wide window used to show 4 + 2). The Doctor count is green when every issue is
+  informational ("nothing to fix"), matching the other cards' green/orange/red
 - Security: runs without a grype report are labelled "brew vulns only" in the scan picker
   (was "dry run, brew vulns only"; dry runs scan with grype from script 2.4.1), and the note
   for an old dry run says dry runs skipped grype before 2.4.1

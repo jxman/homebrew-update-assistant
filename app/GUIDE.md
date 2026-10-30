@@ -487,6 +487,21 @@ Commands are outside the window, so `@Environment(AppModel.self)` isn't availabl
 `@Observable`, reading `model.canStartRun` in `body` is still tracked, and the menu items
 enable and disable themselves as runs start and finish.
 
+### 29. A sidebar footer, and columns that follow the width
+
+The app icon and versions in the lower-left corner (`SidebarFooter`) are attached with
+`.safeAreaInset(edge: .bottom) { SidebarFooter() }` on the sidebar's `List`. A safe-area
+inset reserves space along one edge and places the view there, so the list stops above it
+and scrolls on its own; overlaying the footer instead would cover the last rows. The footer
+is a `Button` with `.buttonStyle(.plain)` (no button chrome) that opens AppKit's standard
+About panel, and `.contentShape(Rectangle())` makes the empty part of the row clickable too.
+
+The Dashboard picks 3, 2 or 1 columns itself. `GridItem(.adaptive(minimum:))` fits as many
+columns as the width allows, which left a 4 + 2 layout of the six cards on a wide window.
+`.onGeometryChange(for: CGFloat.self) { $0.size.width } action: { ... }` reports the view's
+width whenever it changes, and the action stores the column count in `@State`; the grid is
+then built from that many `.flexible()` columns.
+
 ## Trying the actions safely
 
 - **Dry Run** (toolbar Update menu ▾, or the menu bar) changes nothing and shows the live output.

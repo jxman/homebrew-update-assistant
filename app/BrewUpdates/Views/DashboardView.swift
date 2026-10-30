@@ -5,8 +5,13 @@ struct DashboardView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openSettings) private var openSettings
 
-    /// Cards flow into as many columns as fit, each at least 260pt wide
-    private let columns = [GridItem(.adaptive(minimum: 260), spacing: 16)]
+    /// 3, 2 or 1 columns by width. The six cards divide evenly into each, where an adaptive
+    /// grid would leave a half-empty row at 4 or 5 columns.
+    @State private var columnCount = 3
+
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 16), count: columnCount)
+    }
 
     var body: some View {
         ScrollView {
@@ -22,6 +27,10 @@ struct DashboardView: View {
                 recentRuns
             }
             .padding(20)
+        }
+        // Reads the dashboard's width whenever it changes (e.g. resizing the window)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            columnCount = width >= 900 ? 3 : width >= 560 ? 2 : 1
         }
         .navigationTitle("Dashboard")
     }
@@ -103,15 +112,22 @@ struct DashboardView: View {
 
     private var securityCard: some View {
         Card(title: "Security", systemImage: "lock.shield") {
-            if let summary = model.latestSummarizedRun?.summary, summary.security.status == "completed" {
-                Text("\(summary.security.vulnerabilityCount)")
-                    .font(.largeTitle.weight(.semibold))
-                    .foregroundStyle(summary.security.vulnerabilityCount == 0 ? Color.green : Color.red)
-                Text("known vulnerabilities with fixes (Critical/High/Medium)")
-                    .foregroundStyle(.secondary)
-                if let vulns = summary.vulns, vulns.status == "completed" {
-                    Text("brew vulns: \(vulns.findingCount) in \(vulns.formulaCount) formulae, any severity")
-                        .foregroundStyle(.secondary)
+            if let summary = model.latestSummarizedRun?.summary,
+               summary.security.status == "completed" || summary.vulns?.status == "completed" {
+                // The two scanners count different things, so side by side rather than added up
+                HStack(alignment: .top, spacing: 28) {
+                    scannerCount(
+                        summary.security.status == "completed" ? summary.security.vulnerabilityCount : nil,
+                        color: summary.security.vulnerabilityCount == 0 ? .green : .red,
+                        title: "grype",
+                        detail: "fixable, Critical–Medium"
+                    )
+                    scannerCount(
+                        summary.vulns?.status == "completed" ? summary.vulns?.findingCount : nil,
+                        color: brewVulnsColor(summary.vulns),
+                        title: "brew vulns",
+                        detail: "all severities"
+                    )
                 }
             } else {
                 Text("Open the Security tab to view the latest scan")
@@ -124,15 +140,34 @@ struct DashboardView: View {
         }
     }
 
+    /// One scanner's count for the Security card; "—" when that scan didn't run
+    private func scannerCount(_ count: Int?, color: Color, title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(count.map(String.init) ?? "—")
+                .font(.largeTitle.weight(.semibold))
+                .foregroundStyle(count == nil ? .secondary : color)
+            Text(title).font(.callout.weight(.medium))
+            Text(detail).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    /// Red for Critical or High findings, orange for lesser ones only, green for none
+    private func brewVulnsColor(_ vulns: RunSummary.Vulns?) -> Color {
+        guard let vulns, vulns.findingCount > 0 else { return .green }
+        return vulns.bySeverity.critical + vulns.bySeverity.high > 0 ? .red : .orange
+    }
+
     private var doctorCard: some View {
         Card(title: "Doctor", systemImage: "stethoscope") {
             if let latest = model.doctor.latest {
                 let issues = model.doctorIssues.sorted { $0.importance < $1.importance }
                 if let worst = issues.first {
+                    // Same scale as the other cards: green when nothing needs fixing,
+                    // orange when something is worth fixing, red when it should be fixed soon
                     Text("\(issues.count)")
                         .font(.largeTitle.weight(.semibold))
-                        .foregroundStyle(worst.importance.color)
-                    Text(worst.headline)
+                        .foregroundStyle(worst.importance == .informational ? .green : worst.importance.color)
+                    Text(worst.importance == .informational ? "Informational only, nothing to fix" : worst.headline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 } else {
