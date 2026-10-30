@@ -75,7 +75,7 @@ flowchart TB
         app["Brew Updates.app<br/>(menu bar + window)"]
     end
 
-    script["~/bin/brew-updates.command<br/>update · upgrade · doctor · scan · cleanup"]
+    script["~/bin/brew-updates.command<br/>update · upgrade · doctor<br/>deprecations · Grype + brew vulns<br/>cleanup"]
 
     subgraph files["Local state"]
         logs[("~/.brew_logs<br/>logs, reports, *.summary.json,<br/>run lock")]
@@ -85,6 +85,7 @@ flowchart TB
 
     subgraph tools["External tools"]
         brew["Homebrew<br/>brew CLI + GitHub"]
+        osv["brew vulns<br/>OSV.dev lookups"]
         grype["Grype<br/>vulnerability DB"]
         notify["Notification Center<br/>terminal-notifier / osascript"]
     end
@@ -96,14 +97,14 @@ flowchart TB
     script --> tools
     app -- "reads runs, edits config<br/>and schedule" --> files
     app -- "brew info / pin / uninstall<br/>(HOMEBREW_NO_AUTO_UPDATE=1)" --> brew
-    notify -. "brewupdates:// links" .-> app
+    app -. "opened by brewupdates:// links" .- notify
 ```
 
 | Component | Lives in | Role |
 | --- | --- | --- |
-| `brew-updates.command` | source here, deployed to `~/bin/` | Does every update, upgrade, backup, doctor run and scan. Holds the run lock |
+| `brew-updates.command` | source here, deployed to `~/bin/` | Does every update, upgrade, backup, doctor run, deprecation check and vulnerability scan (Grype and `brew vulns`). Holds the run lock |
 | LaunchAgent | `~/Library/LaunchAgents/com.user.brew-update.plist` | Runs the deployed script daily (`--yes --verbose`, notifications on) |
-| Brew Updates app | `app/`, installed to `/Applications/Brew Updates.app` | Reads `~/.brew_logs` and runs the deployed script. Makes only direct `brew` changes the user asks for (pin, uninstall, restore) |
+| Brew Updates app | `app/`, installed to `/Applications/Brew Updates.app` | Reads `~/.brew_logs` and runs the deployed script. Makes only direct `brew` changes the user asks for (pin, uninstall, restore). Scan Now and Check Now run the same read-only scans and `brew doctor` on demand |
 | `scripts/setup.sh` | repo | Deploys the script, installs or reloads the LaunchAgent, checks dependencies |
 | `scripts/install-app.sh` | repo | Builds and signs the app into `/Applications` |
 
@@ -115,7 +116,7 @@ Each part is covered in its own section below.
 | --- | --- |
 | Script | Bash (compatible with macOS `/bin/bash` 3.2) |
 | Scheduling | launchd LaunchAgent |
-| Security scan | Grype + jq |
+| Security scan | Grype (Cellar files) + `brew vulns` (OSV.dev), jq for the JSON reports |
 | Notifications | terminal-notifier (clickable), falling back to `osascript` |
 | App | Swift 6, SwiftUI, macOS 15+, Swift Charts |
 | App project | XcodeGen (`app/project.yml`) |
@@ -127,8 +128,9 @@ Each part is covered in its own section below.
 | --- | --- | --- | --- |
 | Homebrew | [brew.sh](https://brew.sh) | Yes | Script exits with code 4 |
 | git | Xcode Command Line Tools | Yes | Pre-flight check fails |
-| Grype | `brew install --cask grype` | For scans | Scan is skipped with a warning |
-| jq | `brew install jq` | For detailed scan report | Only the table and JSON reports are written |
+| Grype | `brew install --cask grype` | For the Grype scan | Grype scan is skipped with a warning |
+| `brew vulns` | Built into Homebrew (recent versions) | For the `brew vulns` scan | `brew vulns` scan is reported as `unavailable`; Grype still runs |
+| jq | Included with macOS 15+ (`/usr/bin/jq`), or `brew install jq` | For `brew vulns` and the detailed Grype report | `brew vulns` is reported as `unavailable`, and Grype writes only its table and JSON reports |
 | terminal-notifier | `brew install terminal-notifier` | No | Notifications aren't clickable |
 | coreutils | `brew install coreutils` | No | Commands run without `gtimeout` (no timeout) |
 

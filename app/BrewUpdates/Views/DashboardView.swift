@@ -43,8 +43,15 @@ struct DashboardView: View {
             if let run = model.latestRun {
                 StatusBadge(status: run.status)
                     .font(.title2.weight(.semibold))
-                Text("\(run.date.formatted(date: .abbreviated, time: .shortened)) · \(run.date.relativeDescription)")
-                    .foregroundStyle(.secondary)
+                if run.status == .running {
+                    // `style: .timer` counts up every second by itself, with no timer of our own
+                    Text("Started \(run.date.formatted(date: .omitted, time: .shortened)) · running for \(Text(run.date, style: .timer))")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                } else {
+                    Text("\(run.date.formatted(date: .abbreviated, time: .shortened)) · \(run.date.relativeDescription)")
+                        .foregroundStyle(.secondary)
+                }
                 if let summary = run.summary {
                     Text(lastRunDetail(summary))
                         .font(.callout)
@@ -259,6 +266,7 @@ struct RunRow: View {
         HStack {
             Image(systemName: run.status.systemImage)
                 .foregroundStyle(run.status.color)
+                .runningAnimation(run.status)
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 2) {
                 Text(run.date.formatted(date: .abbreviated, time: .shortened))

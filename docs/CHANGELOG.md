@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### SwiftUI App
+
+#### Changed
+- While a run is in progress (scheduled, from Terminal or from the app), its status icon spins
+  on the Dashboard, in Recent Runs and in Runs, and the Last Run card counts the elapsed time
+  up live ("running for 0:54")
+- README: the architecture diagram includes the deprecation check, `brew vulns` and OSV.dev,
+  and reads top to bottom (triggers, script, then state and tools) instead of crossing back up.
+  The dependency tables list `brew vulns`, and jq as included with macOS 15+
+
 ## [App 1.1.0] - 2026-10-30
 
 Adds the second vulnerability scanner (`brew vulns`), deprecation checks and a refreshed

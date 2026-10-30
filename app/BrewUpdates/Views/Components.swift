@@ -56,6 +56,15 @@ struct StatusBadge: View {
     var body: some View {
         Label(status.title, systemImage: status.systemImage)
             .foregroundStyle(status.color)
+            .runningAnimation(status)
+    }
+}
+
+extension View {
+    /// Spins the status symbol while a run is in progress. `symbolEffect` animates an SF Symbol
+    /// in place; `isActive` starts and stops it as the status changes, so finished runs sit still.
+    func runningAnimation(_ status: RunStatus) -> some View {
+        symbolEffect(.rotate, options: .repeat(.continuous), isActive: status == .running)
     }
 }
 

@@ -502,6 +502,17 @@ columns as the width allows, which left a 4 + 2 layout of the six cards on a wid
 width whenever it changes, and the action stores the column count in `@State`; the grid is
 then built from that many `.flexible()` columns.
 
+### 30. Animating SF Symbols and live timers
+
+A running run's icon spins with `.symbolEffect(.rotate, options: .repeat(.continuous),
+isActive: status == .running)`, wrapped as `runningAnimation(_:)` in Components.swift.
+`symbolEffect` animates an SF Symbol in place without any state of our own, and `isActive`
+switches it on and off when the status changes, so finished runs stand still.
+
+`Text(run.date, style: .timer)` shows the time since a date and updates itself every second.
+SwiftUI handles the redraws, so there is no `Timer` to start or cancel. It's interpolated into
+a sentence with `Text("running for \(Text(date, style: .timer))")`.
+
 ## Trying the actions safely
 
 - **Dry Run** (toolbar Update menu ▾, or the menu bar) changes nothing and shows the live output.
