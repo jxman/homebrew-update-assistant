@@ -14,7 +14,7 @@ set -o pipefail
 ###################
 # Configuration
 ###################
-readonly SCRIPT_VERSION="2.3.0"
+readonly SCRIPT_VERSION="2.4.0"
 # Version of the <run>.summary.json format consumed by the UI (see docs/run-summary-schema.md)
 readonly SUMMARY_SCHEMA_VERSION=1
 
@@ -75,8 +75,10 @@ EXCLUDED_FORMULAE=""
 EXCLUDED_CASKS=""
 # Check environment variable first, then default to false
 ENABLE_NOTIFICATIONS="${ENABLE_NOTIFICATIONS:-false}"
-SECURITY_SCAN_ENABLED=false
+SECURITY_SCAN_ENABLED=true
 SECURITY_SCAN_SEVERITY="HIGH,CRITICAL"
+# brew vulns (OSV.dev lookup by formula source); needs no extra tools, so on by default
+VULNS_SCAN_ENABLED=true
 
 # Run state recorded in the summary file. Package lists are space-separated names;
 # *_DETAILS are newline-separated "name|installed|available" records.
@@ -98,6 +100,12 @@ BACKUP_CREATED=false
 DOCTOR_STATUS="not_run"
 SECURITY_STATUS="not_run"
 SECURITY_VULN_COUNT=0
+VULNS_STATUS="not_run"
+# Compact JSON fragments for the summary, filled in by jq when the steps run
+VULNS_COUNTS_JSON=""
+VULNS_BEFORE_UPGRADE_JSON="[]"
+DEPRECATIONS_STATUS="not_run"
+DEPRECATIONS_JSON='{"formulae":[],"casks":[]}'
 CLEANUP_STATUS="not_run"
 
 if [[ -n "${NO_COLOR:-}" ]]; then
@@ -293,6 +301,9 @@ load_config() {
                 SECURITY_SCAN_ENABLED)
                     validate_input "$value" '^(true|false)$' "boolean value" && SECURITY_SCAN_ENABLED="$value"
                     ;;
+                VULNS_SCAN_ENABLED)
+                    validate_input "$value" '^(true|false)$' "boolean value" && VULNS_SCAN_ENABLED="$value"
+                    ;;
                 SECURITY_SCAN_SEVERITY)
                     # Allow comma-separated severity levels
                     validate_input "$value" '^(LOW|MEDIUM|HIGH|CRITICAL)(,(LOW|MEDIUM|HIGH|CRITICAL))*$' "security scan severity" && SECURITY_SCAN_SEVERITY="$value"
@@ -332,7 +343,7 @@ OPTIONS:
     -y, --yes               Automatically answer yes to prompts
     -s, --skip-casks        Skip cask updates
     -c, --skip-cleanup      Skip cleanup operations
-        --skip-security-scan Skip vulnerability scanning
+        --skip-security-scan Skip vulnerability scanning (grype and brew vulns)
     -p, --packages LIST     Only upgrade these packages (space- or comma-separated)
         --no-color          Disable colored output (also honors NO_COLOR)
         --version           Show version and exit
@@ -1124,7 +1135,7 @@ run_security_scan() {
     # Run grype scan with severity filtering
     if [[ "$DRY_RUN" == true ]]; then
         SECURITY_STATUS="dry_run"
-        log_message "🔍 DRY RUN: Would scan for vulnerabilities (severity: $SECURITY_SCAN_SEVERITY)"
+        log_message "🔍 DRY RUN: Would scan the Cellar with grype"
         return $EXIT_SUCCESS
     fi
 
@@ -1183,34 +1194,37 @@ HOMEBREW PACKAGE: \(.artifact.locations[0].path // "" | split("/") | .[4] // "Un
         SECURITY_VULN_COUNT="$vuln_count"
 
         if [[ $vuln_count -gt 0 ]]; then
-            log_warning "⚠️  Found $vuln_count known vulnerabilities with fixes available"
-            log_message "Severity filter: $SECURITY_SCAN_SEVERITY"
-            echo -e "  ${YELLOW}Severity filter: $SECURITY_SCAN_SEVERITY${NC}"
+            local threshold
+            threshold="$(severity_threshold)"
+            log_warning "⚠️  Found $vuln_count known vulnerabilities with fixes available (Critical/High/Medium)"
             echo -e "  ${BLUE}Summary report: $(create_clickable_link "$security_file")${NC}"
 
             if [[ -f "$security_detailed" ]] && [[ -s "$security_detailed" ]] && [[ $(wc -l < "$security_detailed") -gt 5 ]]; then
                 echo -e "  ${BLUE}Detailed report with file paths: $(create_clickable_link "$security_detailed")${NC}"
             fi
 
-            # Show and LOG top vulnerabilities (filter out grype errors).
+            # Show and LOG top vulnerabilities at or above SECURITY_SCAN_SEVERITY (filter out grype errors).
             # awk reads all of its input: piping a large report into `head` makes the writer
             # die of SIGPIPE, which pipefail + set -e turned into a failed run (exit 141).
             local top_vulns
-            top_vulns=$(awk '/Critical|High|Medium/ && !/^NAME/ && !/^error purl/ && shown < 10 { print; shown++ }' \
+            top_vulns=$(awk -v pattern="$(grype_severity_pattern "$threshold")" \
+                '$0 ~ pattern && !/^NAME/ && !/^error purl/ && shown < 10 { print; shown++ }' \
                 "$security_file" 2>/dev/null || true)
 
             if [[ -n "$top_vulns" ]]; then
-                log_message "🔒 Top security vulnerabilities found:"
+                log_message "🔒 Top security vulnerabilities (${threshold} and above):"
                 echo "$top_vulns" | while IFS= read -r line; do
                     log_message "  $line"
                 done
-            fi
 
-            # Always show top 10 in console (even without verbose)
-            echo -e "\n  ${YELLOW}Top vulnerabilities:${NC}"
-            echo "$top_vulns" | while IFS= read -r line; do
-                echo -e "  $line"
-            done
+                # Always show top 10 in console (even without verbose)
+                echo -e "\n  ${YELLOW}Top vulnerabilities (${threshold} and above):${NC}"
+                echo "$top_vulns" | while IFS= read -r line; do
+                    echo -e "  $line"
+                done
+            else
+                log_message "   None at ${threshold} or above (SECURITY_SCAN_SEVERITY=${SECURITY_SCAN_SEVERITY})"
+            fi
 
             # Parse detailed report for actionable info if available
             if [[ -f "$security_detailed" ]]; then
@@ -1229,7 +1243,7 @@ HOMEBREW PACKAGE: \(.artifact.locations[0].path // "" | split("/") | .[4] // "Un
             echo -e "\n  ${GREEN}💡 Tip: Run 'brew upgrade' to update vulnerable packages${NC}"
             log_message "💡 Tip: Run 'brew upgrade' to update vulnerable packages"
         else
-            log_success "✓ No known vulnerabilities found (severity: $SECURITY_SCAN_SEVERITY)"
+            log_success "✓ No known vulnerabilities with fixes available (Critical/High/Medium)"
             log_verbose "Full scan report: $security_file"
         fi
     else
@@ -1238,6 +1252,234 @@ HOMEBREW PACKAGE: \(.artifact.locations[0].path // "" | split("/") | .[4] // "Un
     fi
 
     # Return success - vulnerabilities are informational
+    return $EXIT_SUCCESS
+}
+
+# Lowest level listed in SECURITY_SCAN_SEVERITY (e.g. "HIGH,CRITICAL" -> HIGH): findings at
+# or above it are shown in the console and log; reports and counts keep everything
+severity_threshold() {
+    local level
+    for level in LOW MEDIUM HIGH CRITICAL; do
+        if [[ ",${SECURITY_SCAN_SEVERITY}," == *",${level},"* ]]; then
+            echo "$level"
+            return 0
+        fi
+    done
+    echo "LOW"
+}
+
+# awk pattern matching grype's table severities at or above a level: HIGH -> "Critical|High"
+grype_severity_pattern() {
+    case "$1" in
+        CRITICAL) echo "Critical" ;;
+        HIGH) echo "Critical|High" ;;
+        MEDIUM) echo "Critical|High|Medium" ;;
+        *) echo "Critical|High|Medium|Low" ;;
+    esac
+}
+
+# Why brew vulns can't run (the summary status), or nothing when it can
+vulns_unavailable_reason() {
+    if [[ "$SKIP_SECURITY_SCAN" == true ]]; then
+        echo "skipped"
+    elif [[ "$VULNS_SCAN_ENABLED" != true ]]; then
+        echo "disabled"
+    elif ! command -v jq >/dev/null 2>&1 || ! brew vulns --help >/dev/null 2>&1; then
+        echo "unavailable"
+    fi
+}
+
+# Run `brew vulns --json [formula ...]` into a file. It exits 1 when it finds anything, so
+# success is judged by the report, not the exit status. Read-only (OSV.dev lookups only).
+run_brew_vulns() {
+    local out_file="$1"
+    shift
+    local tmp_file="${out_file}.tmp"
+    local -a cmd=(brew vulns --json)
+    [[ $# -gt 0 ]] && cmd+=("$@")
+
+    if command -v gtimeout >/dev/null 2>&1; then
+        cmd=(gtimeout "$TIMEOUT" "${cmd[@]}")
+    elif command -v timeout >/dev/null 2>&1; then
+        cmd=(timeout "$TIMEOUT" "${cmd[@]}")
+    fi
+
+    log_verbose "Running: ${cmd[*]}"
+    HOMEBREW_NO_AUTO_UPDATE=1 "${cmd[@]}" > "$tmp_file" 2> "${tmp_file}.err" || true
+
+    if jq -e 'has("findings")' "$tmp_file" >/dev/null 2>&1; then
+        mv "$tmp_file" "$out_file"
+        rm -f "${tmp_file}.err"
+        return 0
+    fi
+
+    log_verbose "brew vulns failed: $(awk 'NR <= 3' "${tmp_file}.err" 2>/dev/null || true)"
+    rm -f "$tmp_file" "${tmp_file}.err"
+    return 1
+}
+
+# Before upgrading, report which outdated formulae have known vulnerabilities in the
+# installed version. Advisory only: a finding is a reason to upgrade, not to hold back,
+# and brew vulns can't tell whether the new version is affected until it is installed.
+check_outdated_vulns() {
+    [[ -z "$OUTDATED_FORMULAE" || -n "$(vulns_unavailable_reason)" ]] && return 0
+
+    local report="${LOG_FILE%.log}.vulns-before.tmp"
+    local -a names=()
+    read -ra names <<< "$OUTDATED_FORMULAE"
+
+    if ! run_brew_vulns "$report" "${names[@]}"; then
+        log_verbose "Could not check outdated formulae with brew vulns"
+        return 0
+    fi
+
+    VULNS_BEFORE_UPGRADE_JSON="$(jq -c '[.findings[] | select((.vulnerabilities | length) > 0)
+        | {name: .formula, vulnerability_count: (.vulnerabilities | length)}]' "$report" 2>/dev/null || echo '[]')"
+    rm -f "$report"
+
+    local count
+    count="$(jq 'length' <<< "$VULNS_BEFORE_UPGRADE_JSON")"
+    if [[ "$count" -gt 0 ]]; then
+        log_message "🔒 $count outdated formula(e) have known vulnerabilities in the installed version:"
+        jq -r '.[] | "  - \(.name): \(.vulnerability_count)"' <<< "$VULNS_BEFORE_UPGRADE_JSON" | while IFS= read -r line; do
+            log_message "$line"
+        done
+        log_message "   The scan after the upgrade shows which ones remain"
+    else
+        log_verbose "No known vulnerabilities in the installed versions of outdated formulae"
+    fi
+}
+
+# Check installed formulae against OSV.dev with Homebrew's own scanner. Complements grype:
+# brew vulns maps findings to the formula's source and version (not the files it ships),
+# so it doesn't see bundled dependencies, and it skips formulae without a supported source
+# URL and all casks.
+run_vulns_scan() {
+    VULNS_STATUS="$(vulns_unavailable_reason)"
+    case "$VULNS_STATUS" in
+        skipped)
+            log_verbose "Skipping brew vulns scan (--skip-security-scan)"
+            return $EXIT_SUCCESS
+            ;;
+        disabled)
+            log_verbose "brew vulns scan disabled in configuration"
+            return $EXIT_SUCCESS
+            ;;
+        unavailable)
+            if ! command -v jq >/dev/null 2>&1; then
+                log_warning "⚠️  jq not found, skipping brew vulns scan. Install with: brew install jq"
+            else
+                log_warning "⚠️  This Homebrew has no 'brew vulns' command, skipping. Run: brew update"
+            fi
+            return $EXIT_SUCCESS
+            ;;
+    esac
+
+    log_message "🔒 Checking formulae against OSV.dev (brew vulns)..."
+    local report="${LOG_FILE%.log}.vulns.json"
+
+    if ! run_brew_vulns "$report"; then
+        VULNS_STATUS="failed"
+        log_warning "⚠️  brew vulns did not produce a report"
+        return $EXIT_SUCCESS
+    fi
+    VULNS_STATUS="completed"
+
+    # Patched findings (fixed by a patch in the formula) are left out of the counts
+    local counts
+    counts="$(jq -c '{
+        finding_count: ([.findings[].vulnerabilities[]] | length),
+        formula_count: ([.findings[] | select((.vulnerabilities | length) > 0)] | length),
+        by_severity: (reduce (.findings[].vulnerabilities[].severity // "UNKNOWN" | ascii_downcase) as $s
+            ({critical: 0, high: 0, medium: 0, low: 0, unknown: 0};
+             .[if has($s) then $s else "unknown" end] += 1)),
+        checked: (.checked // 0),
+        skipped: ((.skipped_formulae // []) | length),
+        complete: (.complete // false)
+    }' "$report")"
+    # The summary embeds these fields in its vulns object, so drop the outer braces
+    VULNS_COUNTS_JSON="${counts#\{}"
+    VULNS_COUNTS_JSON="${VULNS_COUNTS_JSON%\}}"
+
+    local finding_count formula_count checked skipped
+    read -r finding_count formula_count checked skipped < <(
+        jq -r '[.finding_count, .formula_count, .checked, .skipped] | @tsv' <<< "$counts")
+    log_verbose "brew vulns checked $checked formulae, skipped $skipped (no supported source URL)"
+
+    if [[ "$finding_count" -eq 0 ]]; then
+        log_success "✓ brew vulns: no known vulnerabilities ($checked formulae checked)"
+        return $EXIT_SUCCESS
+    fi
+
+    log_warning "⚠️  brew vulns: $finding_count known vulnerabilities in $formula_count formula(e)"
+    local threshold top_findings
+    threshold="$(severity_threshold)"
+    # awk (not head) so jq never dies of SIGPIPE under pipefail
+    top_findings="$(jq -r --arg min "$threshold" '
+        def rank: {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}[.] // 0;
+        .findings[] as $f | $f.vulnerabilities[]
+        | select((.severity // "" | rank) >= ($min | rank))
+        | "\($f.formula) \($f.version): \(.id) \(.severity) \(.summary // "")"' "$report" \
+        | awk 'NR <= 10' || true)"
+
+    if [[ -n "$top_findings" ]]; then
+        log_message "🔒 brew vulns findings (${threshold} and above):"
+        echo "$top_findings" | while IFS= read -r line; do
+            log_message "  $line"
+        done
+    else
+        log_message "   None at ${threshold} or above. Full report: $(create_clickable_link "$report")"
+    fi
+
+    return $EXIT_SUCCESS
+}
+
+# List installed formulae and casks Homebrew has deprecated or disabled, from
+# `brew info --json=v2 --installed` rather than by reading brew doctor's text
+check_deprecated_packages() {
+    if ! command -v jq >/dev/null 2>&1; then
+        DEPRECATIONS_STATUS="unavailable"
+        log_verbose "jq not found - skipping deprecation check"
+        return $EXIT_SUCCESS
+    fi
+
+    local result
+    if ! result="$(HOMEBREW_NO_AUTO_UPDATE=1 brew info --json=v2 --installed 2>/dev/null | jq -c '
+        def entry(name): {
+            name: name,
+            disabled: (.disabled // false),
+            date: (if .disabled then .disable_date else .deprecation_date end),
+            reason: (if .disabled then .disable_reason else .deprecation_reason end),
+            replacement: (if .disabled
+                then (.disable_replacement_formula // .disable_replacement_cask)
+                else (.deprecation_replacement_formula // .deprecation_replacement_cask) end)
+        };
+        {
+            formulae: [.formulae[] | select(.deprecated or .disabled) | entry(.full_name)],
+            casks: [.casks[] | select(.deprecated or .disabled) | entry(.full_token // .token)]
+        }')"; then
+        DEPRECATIONS_STATUS="failed"
+        log_warning "Could not check for deprecated packages"
+        return $EXIT_SUCCESS
+    fi
+    DEPRECATIONS_STATUS="completed"
+    DEPRECATIONS_JSON="$result"
+
+    local count
+    count="$(jq '(.formulae | length) + (.casks | length)' <<< "$result")"
+    if [[ "$count" -eq 0 ]]; then
+        log_verbose "✓ No deprecated or disabled packages installed"
+        return $EXIT_SUCCESS
+    fi
+
+    log_warning "⚠️  $count installed package(s) are deprecated or disabled by Homebrew:"
+    jq -r '(.formulae[], .casks[])
+        | "  - \(.name): \(if .disabled then "disabled" else "deprecated" end)"
+          + (if .reason then " (\(.reason))" else "" end)
+          + (if .replacement then ", replacement: \(.replacement)" else "" end)' <<< "$result" \
+        | while IFS= read -r line; do
+            log_message "$line"
+        done
     return $EXIT_SUCCESS
 }
 
@@ -1368,6 +1610,11 @@ show_file_links() {
     if [[ -f "$security_detailed" ]]; then
         echo -n "  🔍 Security Details: "
         create_clickable_link "$security_detailed"
+    fi
+    local vulns_file="${LOG_FILE%.log}.vulns.json"
+    if [[ -f "$vulns_file" ]]; then
+        echo -n "  🛡️  brew vulns Report: "
+        create_clickable_link "$vulns_file"
     fi
 
     # Doctor report if it exists
@@ -1517,6 +1764,11 @@ write_run_summary() {
 
     local base="${LOG_FILE%.log}"
     local tmp_file="${SUMMARY_FILE}.tmp"
+    # Not a ${VAR:-default}: the default's braces would end the expansion early
+    local vulns_counts="$VULNS_COUNTS_JSON"
+    if [[ -z "$vulns_counts" ]]; then
+        vulns_counts='"finding_count":0,"formula_count":0,"by_severity":{"critical":0,"high":0,"medium":0,"low":0,"unknown":0},"checked":0,"skipped":0,"complete":false'
+    fi
 
     cat > "$tmp_file" << EOF
 {
@@ -1563,6 +1815,16 @@ write_run_summary() {
     "status": $(json_string "$SECURITY_STATUS"),
     "vulnerability_count": ${SECURITY_VULN_COUNT:-0}
   },
+  "vulns": {
+    "status": $(json_string "$VULNS_STATUS"),
+    ${vulns_counts},
+    "before_upgrade": ${VULNS_BEFORE_UPGRADE_JSON:-[]}
+  },
+  "deprecations": {
+    "status": $(json_string "$DEPRECATIONS_STATUS"),
+    "formulae": $(jq -c '.formulae' <<< "$DEPRECATIONS_JSON" 2>/dev/null || echo '[]'),
+    "casks": $(jq -c '.casks' <<< "$DEPRECATIONS_JSON" 2>/dev/null || echo '[]')
+  },
   "cleanup": { "status": $(json_string "$CLEANUP_STATUS") },
   "files": {
     "log": $(json_file "$LOG_FILE"),
@@ -1570,7 +1832,8 @@ write_run_summary() {
     "doctor_log": $(json_file "${base}.doctor.log"),
     "security_log": $(json_file "${base}.security.log"),
     "security_detailed_log": $(json_file "${base}.security.detailed.log"),
-    "security_json": $(json_file "${base}.security.json")
+    "security_json": $(json_file "${base}.security.json"),
+    "vulns_json": $(json_file "${base}.vulns.json")
   }
 }
 EOF
@@ -1646,6 +1909,7 @@ main() {
 
     # Check for updates and upgrade if available
     if check_outdated_packages; then
+        check_outdated_vulns
         show_upgrade_preview
         upgrade_packages || {
             exit_code=$?
@@ -1659,7 +1923,9 @@ main() {
 
     # Maintenance and Security
     run_doctor
+    check_deprecated_packages
     run_security_scan
+    run_vulns_scan
     if ! cleanup_homebrew; then
         log_warning "Cleanup encountered issues but continuing..."
     fi

@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### SwiftUI App
 
 #### Added
+- Security: brew vulns results next to grype's, with a **Scanner** picker (Both, Grype, brew
+  vulns) and a **Found By** column. A finding both scanners report (same package, matching
+  advisory ID or alias) is one row. A note says what the scan covered (formulae checked and
+  skipped by brew vulns, or a missing report). The trend chart has a line per scanner, and
+  **Scan Now** runs both at once; if one fails, the other's result is still shown
+- Security: when a scan has no report from a scanner, the note gives the run's actual reason
+  (e.g. "it was a dry run, and dry runs skip grype"). An empty table caused by the severity
+  buttons now says how many findings are hidden, with **Show All Severities**
+- Security opens on the newest run with grype results, as before. Dry runs (which skip grype)
+  now have brew vulns reports, so they're in the scan picker too, labelled
+  "dry run, brew vulns only"; without this the screen opened on one and hid the last grype scan
+- Security: a run without one scanner's report (dry runs have no grype, runs before 2.4.0 no
+  brew vulns) shows that scanner's newest report instead, with a note saying which run it is
+  from. The header says how many findings the severity buttons hide
+- Doctor: deprecated and disabled formulae and casks come from `brew info` (the installed
+  list), with the reason, date and replacement, and replace brew doctor's text-based warning
+- Runs: brew vulns status, outdated formulae that had known vulnerabilities before upgrading,
+  and deprecated packages. Dashboard: brew vulns count under the grype count
+- Settings: **Check formulae against OSV.dev (brew vulns)** (`VULNS_SCAN_ENABLED`)
 - Toolbar: separate **Dry Run** and **Update All** buttons with text labels (Update All shows
   how many packages it will upgrade), replacing the icon-only button whose Dry Run was hidden
   behind a small arrow. New **Run** menu with Dry Run (⇧⌘U), Update All… (⌘U) and Stop (⌘.)
@@ -24,9 +43,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grype versions without the date show "—"
 
 #### Changed
+- Settings treat `SECURITY_SCAN_ENABLED` as on when it's missing, matching script 2.4.0. The
+  severity buttons are labelled **Show in run logs**, since they only change what the logs list
 - Work happens directly on `main`: removed the pre-commit `no-commit-to-branch` hook
 - Every "install grype" hint now says `brew install --cask grype` (Settings, Help, and
   `setup.sh`, the README and the vulnerability guide); they suggested three different commands
+
+## [2.4.0] - 2026-10-29
+
+### Added
+- `brew vulns` scan (Homebrew's own OSV.dev scanner) after the grype scan, writing
+  `*.vulns.json`. It complements grype: brew vulns matches each formula's source and version,
+  while grype finds dependencies bundled inside formulae. Neither replaces the other; brew
+  vulns doesn't scan casks or formulae without a supported source URL. On by default
+  (`VULNS_SCAN_ENABLED`), needs `jq`, and runs in dry runs too since it is read-only.
+  `--skip-security-scan` skips both scans
+- Before upgrading, the outdated formulae are checked with brew vulns and the ones with known
+  vulnerabilities in the installed version are listed. This is advisory: nothing is held back,
+  because a vulnerable installed version is a reason to upgrade and brew vulns can't tell
+  whether the new version is affected until it is installed
+- Deprecation check: installed formulae and casks that Homebrew has deprecated or disabled,
+  from `brew info --json=v2 --installed`, with the reason and replacement
+- Run summary: `vulns` and `deprecations` objects and `files.vulns_json` (additive, still
+  schema version 1)
+
+### Changed
+- `SECURITY_SCAN_ENABLED` defaults to `true` when the config file doesn't set it, matching the
+  config `setup.sh` writes. Without grype the scan is still skipped with a warning
+- Unfixed vulnerabilities: grype keeps `--only-fixed` (its count stays comparable across runs);
+  brew vulns reports findings with no fix yet
+
+### Fixed
+- `SECURITY_SCAN_SEVERITY` was only printed ("Severity filter: HIGH,CRITICAL"), never applied.
+  It now sets the lowest level shown in the console and log for both scans. Reports and
+  `security.vulnerability_count` (Critical/High/Medium with a fix) are unchanged
 
 ## [App 1.0.0] - 2026-10-26
 

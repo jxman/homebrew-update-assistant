@@ -22,3 +22,6 @@ ENABLE_NOTIFICATIONS=false
 # Requires grype: brew install --cask grype
 SECURITY_SCAN_ENABLED=true
 SECURITY_SCAN_SEVERITY=HIGH,CRITICAL  # Options: LOW, MEDIUM, HIGH, CRITICAL (comma-separated)
+
+# Homebrew's own scanner (brew vulns, OSV.dev). Needs jq; no other install
+VULNS_SCAN_ENABLED=true

@@ -16,7 +16,7 @@ A scheduled Bash script that keeps Homebrew updated, backed up, health-checked a
 
 - **Unattended updates.** A LaunchAgent runs the script daily at 3 AM: `brew update`, upgrade outdated formulae and casks (respecting pins and exclusions), then `brew cleanup`.
 - **Safety net.** Before every run it takes a Brewfile backup. Runs never overlap, network calls retry with backoff, and each step has its own exit code.
-- **Health and security reports.** Every run saves a `brew doctor` report and a [Grype](https://github.com/anchore/grype) vulnerability scan of the Cellar.
+- **Health and security reports.** Every run saves a `brew doctor` report, a [Grype](https://github.com/anchore/grype) vulnerability scan of the Cellar, a `brew vulns` (OSV.dev) scan of installed formulae, and a list of deprecated or disabled packages.
 - **Machine-readable results.** Each run writes a `*.summary.json` and sends a macOS notification that links back to the run.
 - **Menu bar and window app.** The app shows runs, installed packages, Security and Doctor findings, and backups. From it you can update, dry run, upgrade, pin, exclude, uninstall, restore and edit the schedule.
 
@@ -160,10 +160,12 @@ flowchart TD
     pre --> backup["Brewfile backup<br/>rotate to MAX_BACKUP_COUNT"]
     backup --> update["brew update<br/>(retry with backoff)"]
     update --> outdated["Find outdated packages<br/>drop pinned, excluded, auto_updates casks"]
-    outdated --> upgrade["Upgrade formulae, then casks<br/>(confirm unless --yes)"]
-    upgrade --> doctor["brew doctor → *.doctor.log"]
+    outdated --> before["brew vulns on outdated formulae<br/>(advisory, never blocks)"]
+    before --> upgrade["Upgrade formulae, then casks<br/>(confirm unless --yes)"]
+    upgrade --> doctor["brew doctor → *.doctor.log<br/>deprecated/disabled check"]
     doctor --> scan["Grype scan → *.security.*"]
-    scan --> cleanup["brew cleanup + autoremove<br/>prune files older than LOG_RETENTION_DAYS"]
+    scan --> vulns["brew vulns → *.vulns.json"]
+    vulns --> cleanup["brew cleanup + autoremove<br/>prune files older than LOG_RETENTION_DAYS"]
     cleanup --> done["Notification + summary"]
     done --> trap(["EXIT trap: write *.summary.json,<br/>release lock"])
 ```
@@ -187,7 +189,7 @@ The EXIT trap also runs on errors and on Ctrl-C/SIGINT, so every run that got th
 | `-y, --yes` | Answer yes to all prompts (automation mode) |
 | `-s, --skip-casks` | Formulae only |
 | `-c, --skip-cleanup` | Skip `brew cleanup` |
-| `--skip-security-scan` | Skip the Grype scan for this run |
+| `--skip-security-scan` | Skip the Grype and `brew vulns` scans for this run |
 | `-p, --packages LIST` | Only upgrade these packages (space- or comma-separated). Pins and exclusions still apply |
 | `--no-color` | Disable colour (also honours `NO_COLOR`) |
 | `--version` | Print the script version |
@@ -214,7 +216,17 @@ The EXIT trap also runs on errors and on Ctrl-C/SIGINT, so every run that got th
 
 ## Security scanning
 
-After the doctor check, the script runs `grype dir:$(brew --prefix)/Cellar --only-fixed`, so it reports only vulnerabilities that already have a fix. Most findings are in dependencies bundled inside formulae (Ruby gems in `cocoapods`, Go stdlib in `terraform`, Python packages in `awscli`), not in the formulae themselves.
+After the doctor check, the script runs two scanners with different blind spots:
+
+| | Grype | `brew vulns` |
+| --- | --- | --- |
+| Looks at | Files in the Cellar | Each formula's source repo and version, looked up in OSV.dev |
+| Finds | Dependencies bundled inside formulae (Ruby gems in `cocoapods`, Go stdlib in `terraform`, Python packages in `awscli`) | Vulnerabilities in the formula's own upstream project |
+| Doesn't cover | Software without a package manifest | Casks, formulae without a supported source URL (e.g. `hashicorp/tap/terraform`) |
+| Unfixed findings | Hidden (`--only-fixed`, so the count tracks what an upgrade can fix) | Shown |
+| Needs | `brew install --cask grype` | A Homebrew with `brew vulns`, and `jq` (included with macOS) |
+
+Grype runs `grype dir:$(brew --prefix)/Cellar --only-fixed`. `brew vulns --json` writes `*.vulns.json`, including which formulae it checked and skipped.
 
 ```mermaid
 flowchart LR
@@ -224,13 +236,18 @@ flowchart LR
     json -- "jq" --> detailed["*.security.detailed.log<br/>file path → owning formula"]
     table --> summary["summary.json<br/>vulnerability count"]
     json --> appsec["App: Security tab<br/>trend chart, fix-available age"]
+    formulae["Installed formulae"] --> bv["brew vulns --json"]
+    bv --> vjson["*.vulns.json"]
+    vjson --> summary
+    vjson --> appsec
 ```
 
-- Enable it with `SECURITY_SCAN_ENABLED=true` in `~/.brew_update_config`. It's off by default.
-- `SECURITY_SCAN_SEVERITY` sets which levels are reported (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`; default `HIGH,CRITICAL`).
-- Vulnerabilities are reported but never block the run.
+- Grype runs when `SECURITY_SCAN_ENABLED=true` (the default) and grype is installed. `brew vulns` runs when `VULNS_SCAN_ENABLED=true` (the default).
+- `SECURITY_SCAN_SEVERITY` sets the lowest level shown in the console and log for both scans (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`; default `HIGH,CRITICAL`). The reports and counts keep every level.
+- Vulnerabilities are reported but never block the run. Before upgrading, the outdated formulae are checked with `brew vulns` and those with known vulnerabilities in the installed version are listed. Upgrades aren't held back: a vulnerable installed version is a reason to upgrade, and the new version's status is only known once it's installed. The scan after the upgrade shows what remains.
+- Deprecated and disabled formulae and casks come from `brew info --json=v2 --installed` and are listed in the run summary and on the app's Doctor screen.
 - `scripts/fix-vulnerabilities.sh` upgrades the formulae that usually carry the vulnerable dependencies, updates pip/urllib3, then scans again.
-- In the app, **Scan Now** runs the same Grype command and keeps the result in memory only.
+- In the app, **Scan Now** runs the same Grype and `brew vulns` commands and keeps the result in memory only. The Security tab can show either scanner or both, matched by advisory ID and aliases.
 
 The parent-package mappings, a manual Cellar search and remediation tips are in [docs/VULNERABILITY_FIX_QUICKSTART.md](docs/VULNERABILITY_FIX_QUICKSTART.md). Grype setup is in [docs/SECURITY_SETUP_SUMMARY.md](docs/SECURITY_SETUP_SUMMARY.md).
 
@@ -301,6 +318,7 @@ Each run is identified by `RUN_ID = YYYYMMDD_HHMMSS`.
 | `….upgrades.log` | script | Per-package upgrade output |
 | `….doctor.log` | script | `brew doctor` report |
 | `….security.log` / `.security.json` / `.security.detailed.log` | script | Grype table, raw JSON, file-path report |
+| `….vulns.json` | script | `brew vulns --json` report |
 | `….summary.json` | script (EXIT trap) | Run result for the app: [schema v1](docs/run-summary-schema.md) |
 | `~/.brew_logs/.brew-updates.lock/` | script, app | Run lock (PID inside) |
 | `~/.brew_logs/.brew-updates-app` | app | Path to the installed app, for notification links |
@@ -322,8 +340,9 @@ Per-run files older than `LOG_RETENTION_DAYS` are deleted at the end of each run
 | `SKIP_CASKS_BY_DEFAULT` | `false` | Act as if `--skip-casks` was passed |
 | `CLEANUP_BY_DEFAULT` | `true` | `false` acts as if `--skip-cleanup` was passed |
 | `ENABLE_NOTIFICATIONS` | `false` | macOS notifications (the LaunchAgent sets `true`) |
-| `SECURITY_SCAN_ENABLED` | `false` | Run the Grype scan |
-| `SECURITY_SCAN_SEVERITY` | `HIGH,CRITICAL` | Levels to report |
+| `SECURITY_SCAN_ENABLED` | `true` | Run the Grype scan |
+| `SECURITY_SCAN_SEVERITY` | `HIGH,CRITICAL` | Lowest level shown in the console and log, for both scans |
+| `VULNS_SCAN_ENABLED` | `true` | Run the `brew vulns` scan |
 | `EXCLUDED_FORMULAE` | empty | Space-separated exact names never upgraded |
 | `EXCLUDED_CASKS` | empty | Same, for casks |
 
@@ -456,6 +475,7 @@ For anything else, run `--dry-run --verbose` and read the run's `.log` and `.doc
 - **Bash 3.2.** The LaunchAgent runs `/bin/bash`, so the script avoids associative arrays and `mapfile`.
 - **Self-updating casks are skipped.** `auto_updates` casks aren't upgraded or counted as outdated. The app shows the app's own version for them instead.
 - **Scans are snapshots.** The app hides findings for formulae that are no longer installed. Scan Now results aren't added to the trend chart.
+- **No bottle provenance check.** `brew verify <formula>` can check a bottle's build attestation, but it downloads the bottle and needs the GitHub CLI signed in, so runs don't call it. Use it by hand when you want to check a specific formula.
 - **Personal signing.** The app is signed with an Apple Development certificate (or ad hoc), not notarized, so a shared copy needs a one-time Gatekeeper override. See [Sharing with others](#sharing-with-others).
 
 ## Roadmap
