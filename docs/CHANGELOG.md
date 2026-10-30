@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [App 1.1.0] - 2026-10-30
+
+Adds the second vulnerability scanner (`brew vulns`), deprecation checks and a refreshed
+Dashboard. Still runs with script 2.2.0 or newer; the brew vulns and deprecation views need
+script 2.4.0, and grype results for dry runs need 2.4.1.
+
 ### SwiftUI App
 
 #### Added

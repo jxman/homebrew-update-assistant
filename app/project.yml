@@ -52,7 +52,7 @@ targets:
         # Keep the Swift module name space-free for `@testable import BrewUpdates`
         PRODUCT_MODULE_NAME: BrewUpdates
         # Bump for each release: 1.1.0 for features, 1.0.1 for fixes (see docs/CHANGELOG.md)
-        MARKETING_VERSION: 1.0.0
+        MARKETING_VERSION: 1.1.0
         # 0 marks a development build; scripts/install-app.sh sets the git commit count
         CURRENT_PROJECT_VERSION: 0
         GENERATE_INFOPLIST_FILE: YES
