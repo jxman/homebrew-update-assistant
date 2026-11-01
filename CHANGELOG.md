@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   open ideas in the README's Roadmap. `docs/PRE_COMMIT_SETUP.md` lists the SwiftLint,
   markdownlint and shebang hooks
 - CI uses `actions/checkout@v5` (Node 24) instead of v4, which ran on the deprecated Node 20
+- CI ShellCheck step pinned to `ludeeus/action-shellcheck@2.0.0` instead of `@master`, and its
+  unsupported `exclude_paths` option (ignored with a warning) removed
 
 ### SwiftUI App
 
