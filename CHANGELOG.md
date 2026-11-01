@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests: one file per source file it covers, in `Models/` and `Services/` folders that mirror
   the app, with shared fixtures in `Support/` (the empty `Fixtures/` folder is gone). Same
   116 tests
+- `RunLock` moved out of `BackupStore.swift` into its own `Services/RunLock.swift`, next to
+  its tests; unchanged
 
 ## [App 1.2.0] - 2026-11-01
 
