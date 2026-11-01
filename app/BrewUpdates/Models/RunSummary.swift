@@ -113,6 +113,8 @@ struct RunSummary: Codable, Sendable, Equatable {
     let status: String
     let exitCode: Int
     let dryRun: Bool
+    /// The run asked for a notification (script 2.5.0+; nil before)
+    let notificationsEnabled: Bool?
     let options: Options
     let homebrewVersion: String
     let outdated: ByKind<Package>

@@ -319,13 +319,6 @@ check_dependencies() {
     fi
 
     # Check optional dependencies
-    if command -v terminal-notifier &> /dev/null; then
-        print_success "terminal-notifier: installed (notifications enabled)"
-    else
-        print_warning "terminal-notifier not found (notifications will use osascript)"
-        print_info "Install with: brew install terminal-notifier"
-    fi
-
     if command -v grype &> /dev/null; then
         local grype_version
         grype_version=$(grype version 2>/dev/null | awk '/^Version:/ {print $2}')

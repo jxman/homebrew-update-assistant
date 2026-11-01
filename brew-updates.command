@@ -14,14 +14,14 @@ set -o pipefail
 ###################
 # Configuration
 ###################
-readonly SCRIPT_VERSION="2.4.1"
+readonly SCRIPT_VERSION="2.5.0"
 # Version of the <run>.summary.json format consumed by the UI (see docs/run-summary-schema.md)
 readonly SUMMARY_SCHEMA_VERSION=1
 
 readonly BACKUP_DIR="${HOME}/.brew_backups"
 readonly LOG_DIR="${HOME}/.brew_logs"
 readonly LOCK_DIR="${LOG_DIR}/.brew-updates.lock"
-# Written by the Brew Updates app with its location; when present, notifications open the app
+# Written by the Brew Updates app with its location; when present, the app shows the notifications
 readonly APP_MARKER="${LOG_DIR}/.brew-updates-app"
 readonly LAUNCHAGENT_LABEL="com.user.brew-update"
 
@@ -121,6 +121,8 @@ cleanup_on_exit() {
     if [[ "$LOCK_HELD" == true ]]; then
         write_run_summary "$exit_code" || true
         rm -rf "$LOCK_DIR" 2>/dev/null || true
+        # After the summary, because the app builds its notification from it
+        notify_run_finished "$exit_code" || true
     fi
 
     if [[ $exit_code -ne 0 && $exit_code -ne $EXIT_ALREADY_RUNNING ]]; then
@@ -192,45 +194,86 @@ log_success() {
     log_message "$1" "SUCCESS"
 }
 
-send_notification() {
-    local title="$1"
-    local message="$2"
-    local sound="${3:-default}"
+# Path of the Brew Updates app, when the app has recorded one that still exists
+installed_app_path() {
+    local app_path=""
+    if [[ -f "$APP_MARKER" ]]; then
+        IFS= read -r app_path < "$APP_MARKER" || true
+    fi
+    [[ -n "$app_path" && -d "$app_path" ]] || return 1
+    echo "$app_path"
+}
 
-    # Only send notifications if ENABLE_NOTIFICATIONS is true
+# One notification at the end of each run, from the EXIT trap once the summary is written.
+# With the app installed, the app shows it (with its own icon, and clicking opens the run);
+# otherwise osascript shows a plain one.
+notify_run_finished() {
+    local exit_code="$1"
+
     if [[ "${ENABLE_NOTIFICATIONS:-false}" != "true" ]]; then
         log_verbose "Notifications disabled (ENABLE_NOTIFICATIONS=${ENABLE_NOTIFICATIONS:-false})"
         return 0
     fi
 
-    log_verbose "Sending notification: $title - $message"
-
-    # Clicking opens this run in the Brew Updates app when it's installed, else the log folder
-    local -a click_action=(-execute "open '${LOG_DIR}'")
-    local app_path=""
-    if [[ -f "$APP_MARKER" ]]; then
-        IFS= read -r app_path < "$APP_MARKER" || true
+    local app_path
+    if app_path="$(installed_app_path)"; then
+        # A running app sees the new summary file by itself. Otherwise start it in the
+        # background; the variable tells it not to open its window.
+        if pgrep -x "Brew Updates" >/dev/null 2>&1; then
+            log_verbose "Brew Updates app is running; it will show the notification"
+            return 0
+        fi
+        if open -g --env BREW_UPDATES_BACKGROUND_LAUNCH=1 -a "$app_path" 2>/dev/null; then
+            log_verbose "Started the Brew Updates app in the background to show the notification"
+            return 0
+        fi
+        log_verbose "Couldn't start the Brew Updates app; using osascript"
     fi
-    if [[ -n "$app_path" && -d "$app_path" ]]; then
-        click_action=(-open "brewupdates://run/${RUN_ID}")
-    fi
 
-    # Try terminal-notifier first (supports click actions)
-    # Use full path to ensure it works in LaunchAgent environment
-    if /opt/homebrew/bin/terminal-notifier -title "$title" -message "$message" -sound "$sound" \
-        "${click_action[@]}" 2>/dev/null; then
-        log_verbose "Notification sent successfully via terminal-notifier (clickable)"
+    local upgraded_count outdated_count message sound="Glass"
+    upgraded_count=$(count_words "$UPGRADED_FORMULAE $UPGRADED_CASKS")
+    outdated_count=$(count_words "$OUTDATED_FORMULAE $OUTDATED_CASKS")
+    case "$exit_code" in
+        0)
+            if [[ "$DRY_RUN" == true && $outdated_count -gt 0 ]]; then
+                message="🔍 Dry run: $outdated_count package(s) can be upgraded"
+            elif [[ $upgraded_count -gt 0 ]]; then
+                message="✅ Upgraded $upgraded_count package(s)"
+            else
+                message="✨ All packages are up to date"
+            fi
+            ;;
+        130|143)
+            message="⏹️ Update cancelled"
+            sound="Basso"
+            ;;
+        *)
+            message="⚠️ Update finished with problems (exit code: $exit_code)"
+            sound="Basso"
+            ;;
+    esac
+    send_notification "Homebrew Update" "$message" "$sound"
+}
+
+# Plain notification via osascript (not clickable). The text is passed as arguments, not
+# pasted into the AppleScript, so quotes in it can't break the script.
+send_notification() {
+    local title="$1"
+    local message="$2"
+    local sound="${3:-default}"
+
+    if ! command -v osascript &> /dev/null; then
+        log_verbose "osascript not available; no notification"
         return 0
     fi
 
-    # Fallback to osascript (works but not clickable)
-    if command -v osascript &> /dev/null; then
-        if osascript -e "display notification \"$message\" with title \"$title\" sound name \"$sound\"" 2>/dev/null; then
-            log_verbose "Notification sent successfully via osascript (non-clickable)"
-            return 0
-        else
-            log_verbose "Notification via osascript failed"
-        fi
+    log_verbose "Sending notification: $title - $message"
+    if osascript -e 'on run argv' \
+        -e 'display notification (item 2 of argv) with title (item 1 of argv) sound name (item 3 of argv)' \
+        -e 'end run' "$title" "$message" "$sound" 2>/dev/null; then
+        log_verbose "Notification sent via osascript"
+    else
+        log_verbose "Notification via osascript failed"
     fi
 }
 
@@ -870,7 +913,6 @@ check_outdated_packages() {
 
     if [[ -z "$OUTDATED_FORMULAE" && -z "$OUTDATED_CASKS" ]]; then
         log_success "✨ All packages are up to date!"
-        send_notification "Homebrew Update" "All packages are up to date!" "Blow"
         return 1  # Nothing to update (non-error condition)
     fi
 
@@ -880,7 +922,6 @@ check_outdated_packages() {
     local total_updates=$((formula_count + cask_count))
 
     log_message "📊 Total packages to update: $total_updates (formulae: $formula_count, casks: $cask_count)"
-    send_notification "Homebrew Update" "📦 $total_updates package(s) available for update" "Purr"
 
     return $EXIT_SUCCESS  # Has updates
 }
@@ -1763,6 +1804,9 @@ write_run_summary() {
     if [[ -z "$vulns_counts" ]]; then
         vulns_counts='"finding_count":0,"formula_count":0,"by_severity":{"critical":0,"high":0,"medium":0,"low":0,"unknown":0},"checked":0,"skipped":0,"complete":false'
     fi
+    # The env var isn't validated like the config key, so map it to a JSON boolean here
+    local notifications_enabled=false
+    [[ "${ENABLE_NOTIFICATIONS:-false}" == "true" ]] && notifications_enabled=true
 
     cat > "$tmp_file" << EOF
 {
@@ -1776,6 +1820,7 @@ write_run_summary() {
   "status": $(json_string "$status"),
   "exit_code": ${exit_code},
   "dry_run": ${DRY_RUN},
+  "notifications_enabled": ${notifications_enabled},
   "options": {
     "skip_casks": ${SKIP_CASKS},
     "skip_cleanup": ${SKIP_CLEANUP},
@@ -1858,9 +1903,6 @@ main() {
     log_verbose "Run ${RUN_ID} (trigger: ${RUN_TRIGGER}, version: ${SCRIPT_VERSION})"
     [[ -n "$REQUESTED_PACKAGES" ]] && log_message "🎯 Limiting upgrade to: $REQUESTED_PACKAGES"
 
-    # Send start notification
-    send_notification "Homebrew Update" "Starting Homebrew update process..." "Submarine"
-
     # Pre-flight checks
     check_homebrew
     check_prerequisites
@@ -1928,13 +1970,7 @@ main() {
     show_final_summary
     RUN_COMPLETED=true
 
-    # Send completion notification
-    if [[ $exit_code -eq 0 ]]; then
-        send_notification "Homebrew Update" "✅ Update completed successfully!" "Glass"
-    else
-        send_notification "Homebrew Update" "⚠️ Update completed with warnings (code: $exit_code)" "Basso"
-    fi
-
+    # The EXIT trap writes the summary and sends the notification
     exit "$exit_code"
 }
 

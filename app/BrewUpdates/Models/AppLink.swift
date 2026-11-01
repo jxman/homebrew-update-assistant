@@ -1,7 +1,8 @@
 import Foundation
 
-/// `brewupdates://` links the app opens. The script's notifications use `run/<RUN_ID>`, so
-/// clicking one shows that run. `brewupdates://installed` (or any section name) opens a section.
+/// `brewupdates://` links the app opens. `run/<RUN_ID>` shows that run (clicking one of the
+/// app's notifications goes through it too). `brewupdates://installed` (or any section name)
+/// opens a section.
 enum AppLink: Equatable, Sendable {
     static let scheme = "brewupdates"
 

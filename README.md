@@ -17,7 +17,7 @@ A scheduled Bash script that keeps Homebrew updated, backed up, health-checked a
 - **Unattended updates.** A LaunchAgent runs the script daily at 3 AM: `brew update`, upgrade outdated formulae and casks (respecting pins and exclusions), then `brew cleanup`.
 - **Safety net.** Before every run it takes a Brewfile backup. Runs never overlap, network calls retry with backoff, and each step has its own exit code.
 - **Health and security reports.** Every run saves a `brew doctor` report, a [Grype](https://github.com/anchore/grype) vulnerability scan of the Cellar, a `brew vulns` (OSV.dev) scan of installed formulae, and a list of deprecated or disabled packages.
-- **Machine-readable results.** Each run writes a `*.summary.json` and sends a macOS notification that links back to the run.
+- **Machine-readable results.** Each run writes a `*.summary.json` and ends with one macOS notification; with the app installed, the app shows it and clicking it opens the run.
 - **Housekeeping visibility.** The app shows what you can clean up: packages nothing needs any more, deprecated or disabled packages, and packages with security issues you might want to upgrade, replace or remove.
 - **Menu bar and window app.** The app shows runs, installed packages, Security and Doctor findings, and backups. From it you can update, dry run, upgrade, pin, exclude, uninstall, restore and edit the schedule.
 
@@ -87,7 +87,7 @@ flowchart TB
         brew["Homebrew<br/>brew CLI + GitHub"]
         osv["brew vulns<br/>OSV.dev lookups"]
         grype["Grype<br/>vulnerability DB"]
-        notify["Notification Center<br/>terminal-notifier / osascript"]
+        notify["Notification Center<br/>osascript fallback"]
     end
 
     agent --> script
@@ -97,7 +97,7 @@ flowchart TB
     script --> tools
     app -- "reads runs, edits config<br/>and schedule" --> files
     app -- "brew info / pin / uninstall<br/>(HOMEBREW_NO_AUTO_UPDATE=1)" --> brew
-    app -. "opened by brewupdates:// links" .- notify
+    app -. "end-of-run notifications<br/>(UserNotifications)" .-> notify
 ```
 
 | Component | Lives in | Role |
@@ -117,7 +117,7 @@ Each part is covered in its own section below.
 | Script | Bash (compatible with macOS `/bin/bash` 3.2) |
 | Scheduling | launchd LaunchAgent |
 | Security scan | Grype (Cellar files) + `brew vulns` (OSV.dev), jq for the JSON reports |
-| Notifications | terminal-notifier (clickable), falling back to `osascript` |
+| Notifications | The app (`UserNotifications`, clickable), or `osascript` without the app |
 | App | Swift 6, SwiftUI, macOS 15+, Swift Charts |
 | App project | XcodeGen (`app/project.yml`) |
 | Quality | ShellCheck, SwiftLint, pre-commit, ggshield, GitHub Actions |
@@ -131,7 +131,6 @@ Each part is covered in its own section below.
 | Grype | `brew install --cask grype` | For the Grype scan | Grype scan is skipped with a warning |
 | `brew vulns` | Built into Homebrew (recent versions) | For the `brew vulns` scan | `brew vulns` scan is reported as `unavailable`; Grype still runs |
 | jq | Included with macOS 15+ (`/usr/bin/jq`), or `brew install jq` | For `brew vulns`, the deprecation check and the detailed Grype report | `brew vulns` and the deprecation check are reported as `unavailable`, and Grype writes only its table and JSON reports |
-| terminal-notifier | `brew install terminal-notifier` | No | Notifications aren't clickable |
 | coreutils | `brew install coreutils` | No | Commands run without `gtimeout` (no timeout) |
 
 **Development dependencies:** Xcode, `brew install xcodegen swiftlint shellcheck ggshield`, and `pre-commit` (via pip).
@@ -258,17 +257,26 @@ The parent-package mappings, a manual Cellar search and remediation tips are in 
 
 ## Notifications
 
-Notifications are sent only when `ENABLE_NOTIFICATIONS=true`. The LaunchAgent sets it; you can also set it in the config file or as an env var.
+Each run ends with one notification, sent only when `ENABLE_NOTIFICATIONS=true`. The LaunchAgent sets it; you can also set it in the config file (Settings → Updates in the app) or as an env var. The script records the choice in the run's summary (`notifications_enabled`).
 
-| Event | Sound |
-| --- | --- |
-| Run starting | Submarine |
-| Updates available (with count) | Purr |
-| Completed successfully | Glass |
-| Everything already up to date | Blow |
-| Warnings or failures | Basso |
+Who shows it depends on whether the app is installed (`~/.brew_logs/.brew-updates-app` points at an existing app):
 
-When `terminal-notifier` is installed, clicking a notification opens the run in the app via a `brewupdates://run/{RUN_ID}` link (if `~/.brew_logs/.brew-updates-app` points at an installed app) or opens the log folder otherwise. Without terminal-notifier, the script falls back to non-clickable `osascript` notifications.
+```mermaid
+flowchart TB
+    exit["Run ends<br/>(EXIT trap writes *.summary.json)"] --> enabled{"ENABLE_NOTIFICATIONS<br/>= true?"}
+    enabled -- no --> none["No notification"]
+    enabled -- yes --> installed{"App installed?"}
+    installed -- yes --> running{"App running?"}
+    running -- yes --> watch["App sees the new summary<br/>in ~/.brew_logs"]
+    running -- no --> launch["open -g --env BREW_UPDATES_BACKGROUND_LAUNCH=1<br/>(starts the app without its window)"]
+    launch --> watch
+    watch --> post["App posts it<br/>app icon · click opens the run"]
+    installed -- no --> osa["osascript notification<br/>Script Editor icon · not clickable"]
+    launch -. "open fails" .-> osa
+```
+
+- **With the app:** one notification per run, with the app's icon, saying what happened ("Upgraded 3 packages", "Dry run finished: 2 packages can be upgraded", "Update failed"). Clicking it opens that run. The app only announces runs that finished in the last 15 minutes and never the same run twice. Runs started from the app don't show a banner while the app is in front, only in Notification Center.
+- **Without the app** (script only, or Linux): a plain `osascript` notification from Script Editor, not clickable. Sound is Glass when the run succeeded, Basso for cancelled runs and problems. Linux gets no notification.
 
 ## The Brew Updates app
 
@@ -343,7 +351,7 @@ Each run is identified by `RUN_ID = YYYYMMDD_HHMMSS`.
 | `….vulns.json` | script | `brew vulns --json` report |
 | `….summary.json` | script (EXIT trap) | Run result for the app: [schema v1](docs/run-summary-schema.md) |
 | `~/.brew_logs/.brew-updates.lock/` | script, app | Run lock (PID inside) |
-| `~/.brew_logs/.brew-updates-app` | app | Path to the installed app, for notification links |
+| `~/.brew_logs/.brew-updates-app` | app | Path to the installed app; the script leaves notifications to it |
 | `~/.brew_logs/launchagent.log`, `launchagent_error.log` | launchd | LaunchAgent stdout/stderr |
 | `~/.brew_backups/brew_backup_{RUN_ID}` | script | Brewfile (`brew bundle dump`) |
 | `~/.brew_update_config` | user, app | Settings (below) |
@@ -486,7 +494,7 @@ flowchart LR
 | Disk space (exit 3) | `df -h $(brew --prefix)`, `brew cleanup --prune=all` |
 | Scan skipped | `grype version`. Install with `brew install --cask grype` |
 | Grype's first scan is slow | It's downloading its vulnerability DB. Later scans use the cached copy |
-| No notifications | System Settings → Notifications → terminal-notifier / Script Editor; Focus mode; `ENABLE_NOTIFICATIONS` |
+| No notifications | System Settings → Notifications → Brew Updates (or Script Editor without the app); Focus mode; `ENABLE_NOTIFICATIONS` |
 | Script and `~/bin` copy differ | Run `./scripts/setup.sh` |
 
 For anything else, run `--dry-run --verbose` and read the run's `.log` and `.doctor.log`.

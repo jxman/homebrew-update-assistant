@@ -74,8 +74,8 @@ Re-run `xcodegen generate` whenever files are **added, removed or renamed**, or 
 `./scripts/install-app.sh` (from the repo root) builds a Release version, copies it to
 `/Applications/Brew Updates.app` and adds a Desktop alias. Run it again after changing the
 app; it asks you to quit the installed copy first. Keep using ⌘R in Xcode while developing,
-but don't leave both copies open: you'd get two menu bar icons, and notifications open
-whichever copy was launched last.
+but don't leave both copies open: you'd get two menu bar icons, and both copies would show
+each run's notification.
 
 **Versions.** The version is `MARKETING_VERSION` in `app/project.yml` (1.0.0). Bump it when
 you release something (1.1.0 for features, 1.0.1 for fixes), add a CHANGELOG entry, and tag
@@ -379,14 +379,14 @@ inverts `skipCasksByDefault`.
 
 The app registers the `brewupdates://` scheme in its Info.plist (the `info:` block in
 `project.yml`). When something opens such a link (`open "brewupdates://installed"` in
-Terminal, or clicking one of the script's notifications), macOS hands it to the app and
+Terminal, or clicking one of the app's notifications), macOS hands it to the app and
 `.onOpenURL` in `ContentView` receives it. `AppLink` turns the URL into a value (and rejects
 anything malformed), and `AppModel.open(_:)` switches to the right screen. Parsing outside
 the view keeps it testable (`AppLinkTests`).
 
 The script learns where the app is from `~/.brew_logs/.brew-updates-app`, which the app
-writes at launch. Only then do its notifications use `brewupdates://run/<RUN_ID>`; otherwise
-clicking still opens the log folder.
+writes at launch. When that file points at an existing app, the script leaves the end-of-run
+notification to the app (see 31).
 
 ### 23. `.task(id:)` with several inputs
 
@@ -513,6 +513,34 @@ switches it on and off when the status changes, so finished runs stand still.
 SwiftUI handles the redraws, so there is no `Timer` to start or cancel. It's interpolated into
 a sentence with `Text("running for \(Text(date, style: .timer))")`.
 
+### 31. Notifications with `UserNotifications`
+
+`NotificationService` posts notifications through `UNUserNotificationCenter`, Apple's
+notification API. A notification posted by the app belongs to the app: it shows the app's
+icon and is listed under "Brew Updates" in System Settings → Notifications. A command-line
+tool can't do that, which is why the script's own fallback (`osascript`) shows Script Editor.
+
+- **Permission.** `requestAuthorization(options:)` shows macOS's "Allow notifications?"
+  prompt the first time and afterwards just returns the user's answer. `AppModel.start()` asks
+  at launch so the prompt doesn't wait for the first 3 AM run.
+- **Posting.** A `UNMutableNotificationContent` (title, body, sound) goes into a
+  `UNNotificationRequest`. Its identifier is the run ID, so posting the same run twice
+  replaces the notification rather than adding a second one. `trigger: nil` means "now".
+- **The delegate.** Clicks come back through `UNUserNotificationCenterDelegate`. `AppDelegate`
+  sets it up in `applicationWillFinishLaunching`, because clicking a notification can launch
+  the app and the click is delivered right after. The click opens a `brewupdates://run/<id>`
+  link, reusing the `.onOpenURL` path from 22. `willPresent` decides what happens while the
+  app is frontmost (by default: nothing).
+- **`nonisolated`.** The delegate methods are called off the main actor, so they are marked
+  `nonisolated` and hop back with `await MainActor.run { ... }`.
+
+What to show comes from the run's summary (`RunNotification`, tested without the UI), and
+`AppModel+Notifications.swift` decides when: the newest finished run, once (the last run ID
+is kept in `UserDefaults`), if it asked for a notification and finished in the last
+15 minutes. When the app isn't running, the script starts it with `open -g --env
+BREW_UPDATES_BACKGROUND_LAUNCH=1`; `.defaultLaunchBehavior(.suppressed)` on the `Window`
+scene then keeps the main window closed, so only the menu bar icon and the notification appear.
+
 ## Trying the actions safely
 
 - **Dry Run** (toolbar Update menu ▾, or the menu bar) changes nothing and shows the live output.
@@ -575,7 +603,8 @@ Small, safe changes for practice. Use previews (⌥⌘↩) to see the result imm
 | Issue navigator shows "Update to recommended settings" | Usually after an Xcode upgrade. **Don't click Perform Changes** (the next `xcodegen generate` undoes it). Note the pre-checked settings, add them to `settings.base` in `project.yml`, set `options.xcodeVersion` to the new Xcode version, and regenerate |
 | Schedule Save says an update is running | Reloading the LaunchAgent would stop a scheduled run in progress. Wait for it to finish (Runs shows it as Running) |
 | Schedule toggle won't turn on | Check `launchctl print gui/$(id -u)/com.user.brew-update`. If the plist is missing, run `scripts/setup.sh` |
-| Clicking a notification opens the log folder, not the app | Launch the app once so it records its location in `~/.brew_logs/.brew-updates-app`, and make sure the deployed script is v2.3.0+ (`scripts/setup.sh`) |
+| Notifications come from Script Editor, not the app | Launch the app once so it records its location in `~/.brew_logs/.brew-updates-app`, and make sure the deployed script is v2.5.0+ (`scripts/setup.sh`) |
+| No notification from the app | Allow notifications for Brew Updates in System Settings → Notifications (if you once denied it: `tccutil reset UserNotification com.jxman.BrewUpdates`), and check that `ENABLE_NOTIFICATIONS=true` |
 | A backup shows many `vscode` entries as added/missing | Backups made by app runs before phase 4 lacked VS Code extensions (the app's PATH didn't include `/usr/local/bin`). They age out after `MAX_BACKUP_COUNT` runs |
 | A cask shows "App missing" | The app was deleted (or renamed) outside Homebrew, but brew still lists it. Doctor lists these with **Clear Record…** buttons, or `brew reinstall --cask <name>` gets the app back |
 | A cask you installed isn't in the Installed list | Homebrew can't read its definition (often a tap that a Homebrew update broke), so it skips it. Doctor lists it with Homebrew's error and a link to report it to the tap |

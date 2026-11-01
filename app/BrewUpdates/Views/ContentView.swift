@@ -45,7 +45,7 @@ struct ContentView: View {
         }
         // `.task` runs async work when the view appears and cancels it if the view goes away
         .task { await model.start() }
-        // `brewupdates://` links, e.g. from clicking one of the script's notifications
+        // `brewupdates://` links, e.g. from clicking one of the app's notifications
         .onOpenURL { url in
             if let link = AppLink(url: url) {
                 model.open(link)

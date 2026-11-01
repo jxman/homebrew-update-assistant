@@ -11,6 +11,10 @@ struct BrewUpdatesApp: App {
     /// The delegate owns the model so the scenes below and the quit handling share one instance.
     private var model: AppModel { appDelegate.model }
 
+    /// Set by the script (`open --env`) when it starts the app in the background
+    private static let isBackgroundLaunch =
+        ProcessInfo.processInfo.environment["BREW_UPDATES_BACKGROUND_LAUNCH"] != nil
+
     var body: some Scene {
         // `Window` (not `WindowGroup`) because there is only ever one main window
         Window("Brew Updates", id: "main") {
@@ -20,6 +24,8 @@ struct BrewUpdatesApp: App {
                 .environment(model)
                 .frame(minWidth: 960, minHeight: 600)
         }
+        // When the script starts the app only to show a notification, don't open the window
+        .defaultLaunchBehavior(Self.isBackgroundLaunch ? .suppressed : .automatic)
         .commands {
             CommandGroup(after: .toolbar) {
                 Button("Refresh") {
@@ -63,6 +69,17 @@ struct BrewUpdatesApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
+
+    /// Clicking a notification opens its run through the `brewupdates://` link, the same way
+    /// as from Terminal, so SwiftUI brings up the main window even if it was closed.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        model.notifications.onOpenRun = { runID in
+            if let url = URL(string: "\(AppLink.scheme)://run/\(runID)") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+        model.notifications.activate()
+    }
 
     /// Quitting closes the script's output pipe, which would kill it mid-upgrade without a
     /// summary. Ask first, then stop it cleanly and quit once it has exited.

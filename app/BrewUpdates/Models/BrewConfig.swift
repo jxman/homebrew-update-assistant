@@ -8,6 +8,9 @@ struct BrewConfig: Sendable, Equatable {
     var excludedFormulae: Set<String> { words(for: "EXCLUDED_FORMULAE") }
     var excludedCasks: Set<String> { words(for: "EXCLUDED_CASKS") }
 
+    /// Off unless set to true, like the script
+    var notificationsEnabled: Bool { values["ENABLE_NOTIFICATIONS"] == "true" }
+
     /// On unless set to false (the script's default since 2.4.0)
     var securityScanEnabled: Bool { values["SECURITY_SCAN_ENABLED"] != "false" }
 

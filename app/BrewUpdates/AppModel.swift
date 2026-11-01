@@ -53,6 +53,8 @@ final class AppModel {
     let doctor: DoctorModel
     /// Scans started from the Security screen
     let security: SecurityScanModel
+    /// Notification Center; `AppDelegate` connects its clicks to `open(_:)`
+    let notifications = NotificationService()
     // Not private: AppModel+Packages.swift uses it too
     let brew = BrewService()
     private let watcher = DirectoryWatcher()
@@ -130,9 +132,15 @@ final class AppModel {
             }
         }
         await refresh()
+        // Ask for permission now, rather than when the first run finishes at 3 AM. The
+        // LaunchAgent can turn notifications on without the config file, so check the last run too.
+        if config.notificationsEnabled || latestSummarizedRun?.summary?.notificationsEnabled == true {
+            await notifications.requestAuthorization()
+        }
     }
 
-    /// Lets the script's notifications link to this app (see `AppPaths.appMarker`).
+    /// Tells the script the app is installed, so it leaves notifications to the app
+    /// (see `AppPaths.appMarker`).
     private func registerAppLocation() {
         try? FileManager.default.createDirectory(at: paths.logDirectory, withIntermediateDirectories: true)
         try? Data((Bundle.main.bundlePath + "\n").utf8).write(to: paths.appMarker, options: .atomic)
@@ -164,6 +172,7 @@ final class AppModel {
         await doctor.reload(runs: runs)
         await installedLoad
         lastRefreshed = .now
+        notifyAboutFinishedRun()
     }
 
     func loadInstalled() async {
@@ -204,6 +213,7 @@ final class AppModel {
 
     func reloadRuns() async {
         apply(await RunStore(paths: paths).loadRuns())
+        notifyAboutFinishedRun()
         await doctor.reload(runs: runs)
     }
 
@@ -361,6 +371,9 @@ extension AppModel {
 
     func saveConfig(_ changes: [(key: String, value: String)]) async throws {
         config = try await ConfigEditor(paths: paths).apply(changes)
+        if config.notificationsEnabled {
+            await notifications.requestAuthorization()
+        }
     }
 
     private func changePackages(_ change: () async throws -> Void) async {

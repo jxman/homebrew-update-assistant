@@ -20,7 +20,7 @@ struct AppPaths: Sendable {
     }
     var launchAgentLog: URL { logDirectory.appending(path: "launchagent.log") }
     var launchAgentErrorLog: URL { logDirectory.appending(path: "launchagent_error.log") }
-    /// Written by the app with its own location; the script makes notifications open the
-    /// app (instead of the log folder) when this points at an existing app
+    /// Written by the app with its own location. When this points at an existing app, the
+    /// script leaves its end-of-run notification to the app (`RunNotification`)
     var appMarker: URL { logDirectory.appending(path: ".brew-updates-app") }
 }

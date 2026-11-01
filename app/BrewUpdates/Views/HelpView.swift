@@ -204,8 +204,9 @@ enum HelpTopic: String, CaseIterable, Identifiable {
                 + "shows the same count.",
             "Its menu shows the last and next run, and lets you start an update or dry run, open the "
                 + "app or Settings, or stop a run.",
-            "Scheduled runs send notifications. Clicking one opens that run in the app (this needs "
-                + "`brew install terminal-notifier`)."
+            "When notifications are on (Settings → Updates), each run ends with one notification saying "
+                + "what happened. Clicking it opens that run. If the app isn't running, the script starts "
+                + "it in the background, without its window, to show the notification."
         ]
         case .troubleshooting: [
             "**Scheduled run didn't happen:** check that scheduled runs are on in Settings → Schedule, "
@@ -219,8 +220,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             "**A finding looks wrong:** scanners sometimes misread version numbers (for example "
                 + "ImageMagick's `7.1.2-34`). To hide one finding from grype, add an ignore rule to "
                 + "`~/.grype.yaml` for that vulnerability and package, and remove it once grype is fixed.",
-            "**No notifications:** allow them for terminal-notifier (or Script Editor) in System "
-                + "Settings → Notifications, and check Focus mode."
+            "**No notifications:** allow them for Brew Updates in System Settings → Notifications, "
+                + "check Focus mode, and check that notifications are on in Settings → Updates."
         ]
         }
     }

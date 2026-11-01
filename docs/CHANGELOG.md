@@ -7,13 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- `setup.sh`'s dependency check says what each scanner tool is for: a missing grype skips only
-  the grype scan, `brew vulns` is checked, and jq is listed as needed for `brew vulns`, the
-  deprecation check and the detailed grype report (it ships with macOS 15+). The grype line
-  shows the version number instead of "Application: grype"
+## [App 1.2.0] - 2026-11-01
+
+The app shows each run's notification itself, with its own icon. Needs script 2.5.0 for
+notifications; everything else still runs with script 2.2.0 or newer.
 
 ### SwiftUI App
+
+#### Added
+- The app shows each run's notification itself (`UserNotifications`), with its own icon and
+  under "Brew Updates" in System Settings → Notifications. It says what happened ("Upgraded 3
+  packages", "Dry run finished", "Update failed") and clicking it opens that run. Only runs
+  that asked for one (script 2.5.0+) and finished in the last 15 minutes are announced, each
+  once. Runs started from the app go straight to Notification Center while the app is in front.
+  The app asks for notification permission at launch when notifications are on
 
 #### Changed
 - While a run is in progress (scheduled, from Terminal or from the app), its status icon spins
@@ -28,6 +35,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README: the architecture diagram includes the deprecation check, `brew vulns` and OSV.dev,
   and reads top to bottom (triggers, script, then state and tools) instead of crossing back up.
   The dependency tables list `brew vulns`, and jq as included with macOS 15+
+
+## [2.5.0] - 2026-11-01
+
+### Changed
+- Notifications: one per run, at the end, instead of up to four (the "Starting…" and
+  "N packages available" ones are gone). It is sent from the EXIT trap after the summary is
+  written, so failed and cancelled runs get one too. When the Brew Updates app is installed,
+  the script leaves it to the app, starting the app in the background without its window if
+  it isn't running; otherwise it uses `osascript`. The summary records the choice as
+  `notifications_enabled` (additive, still schema 1)
+- The `osascript` notification passes its text as arguments instead of building AppleScript
+  from it, so quotes in a message can't break it
+- `setup.sh`'s dependency check says what each scanner tool is for: a missing grype skips only
+  the grype scan, `brew vulns` is checked, and jq is listed as needed for `brew vulns`, the
+  deprecation check and the detailed grype report (it ships with macOS 15+). The grype line
+  shows the version number instead of "Application: grype"
+
+### Removed
+- terminal-notifier: the script no longer uses it (macOS doesn't let it show another app's
+  icon, and it needed its own notification permission). `setup.sh` no longer checks for it.
+  `brew uninstall terminal-notifier` if nothing else uses it
 
 ## [App 1.1.0] - 2026-10-30
 

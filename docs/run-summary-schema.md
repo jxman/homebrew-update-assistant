@@ -45,6 +45,7 @@ instead of parsing the human-readable logs.
 | `status` | string | See [Status values](#status-values) |
 | `exit_code` | int | Process exit code (see [Exit codes](#exit-codes)) |
 | `dry_run` | bool | `--dry-run` was used |
+| `notifications_enabled` | bool | `ENABLE_NOTIFICATIONS` was on (config file or env var), so the run asked for a notification. With the app installed, the app shows it from this summary. Missing before 2.5.0 |
 | `options.skip_casks` | bool | Casks skipped (flag or `SKIP_CASKS_BY_DEFAULT`) |
 | `options.skip_cleanup` | bool | Cleanup skipped (flag or `CLEANUP_BY_DEFAULT=false`) |
 | `options.skip_security_scan` | bool | `--skip-security-scan` was used (skips grype and brew vulns) |
@@ -129,6 +130,7 @@ alive is treated as stale and removed. The app can check for this directory to s
   "status": "success",
   "exit_code": 0,
   "dry_run": false,
+  "notifications_enabled": true,
   "options": {
     "skip_casks": false,
     "skip_cleanup": false,
