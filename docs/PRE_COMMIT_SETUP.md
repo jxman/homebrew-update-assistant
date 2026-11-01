@@ -101,6 +101,15 @@ The configuration is in `.pre-commit-config.yaml`. Here's what each hook does:
 - Validates bash syntax with `bash -n`
 - Runs on: `*.sh`, `*.command`, `*.bash`
 
+### Swift and Markdown
+
+**SwiftLint** (hooks/swiftlint.sh)
+- Runs `swiftlint lint --strict` on the SwiftUI app with `app/.swiftlint.yml`
+- Install with `brew install swiftlint`
+
+**markdownlint**
+- Lints Markdown files (README, docs, GUIDE)
+
 ### File Checks
 
 **check-added-large-files**
@@ -127,6 +136,9 @@ The configuration is in `.pre-commit-config.yaml`. Here's what each hook does:
 
 **check-merge-conflict**
 - Detects merge conflict markers
+
+**check-shebang-scripts-are-executable / check-executables-have-shebangs**
+- A script with a shebang must be executable, and an executable file must have a shebang
 
 ### Custom Hooks
 

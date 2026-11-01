@@ -7,12 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `CHANGELOG.md` moved to the repo root and `DEPLOYMENT.md` into `docs/`. The old
+  `docs/IMPROVEMENTS.md` backlog (from 2024, almost all shipped) is replaced by the three
+  open ideas in the README's Roadmap. `docs/PRE_COMMIT_SETUP.md` lists the SwiftLint,
+  markdownlint and shebang hooks
+
 ### SwiftUI App
 
 #### Changed
 - Source folders: `App/` (entry point, `AppDelegate` in its own file), `State/` (`AppModel` and
   the other `@Observable` models), `Resources/` (asset catalog), and `Views/` grouped into one
   folder per screen plus `Shared/`. Files moved only; no behaviour changes
+- Tests: one file per source file it covers, in `Models/` and `Services/` folders that mirror
+  the app, with shared fixtures in `Support/` (the empty `Fixtures/` folder is gone). Same
+  116 tests
 
 ## [App 1.2.0] - 2026-11-01
 

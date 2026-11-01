@@ -341,12 +341,13 @@ Your previous config will be restored if you didn't use `--config` during uninst
 ~/Documents/my-projects/scripts/brewUpdates/
 ├── brew-updates.command          # Main script (edit here)
 ├── scripts/                       # Management scripts
-│   ├── setup.sh                   # Deployment script
+│   ├── setup.sh                   # Deployment script (writes the LaunchAgent plist)
 │   ├── uninstall.sh               # Uninstall script
+│   ├── install-app.sh             # Build and install the app
 │   └── fix-vulnerabilities.sh     # Utility script
-├── com.user.brew-update.plist     # LaunchAgent template
+├── examples/                      # Config and LaunchAgent plist samples
+├── docs/DEPLOYMENT.md             # This file
 ├── README.md                      # User documentation
-├── DEPLOYMENT.md                  # This file
 └── CLAUDE.md                      # Claude Code instructions
 ```
 
@@ -492,6 +493,6 @@ deploy-brew
 
 ## See Also
 
-- [README.md](README.md) - User documentation
-- [CLAUDE.md](CLAUDE.md) - Development guidelines
-- [docs/CHANGELOG.md](docs/CHANGELOG.md) - Version history
+- [README.md](../README.md) - User documentation
+- [CLAUDE.md](../CLAUDE.md) - Development guidelines
+- [CHANGELOG.md](../CHANGELOG.md) - Version history

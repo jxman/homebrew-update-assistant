@@ -49,7 +49,7 @@ and run lock. The only direct changes are `brew pin`/`unpin`, the settings in
 | `BrewUpdates/Views/<Screen>/` | SwiftUI screens, one folder per sidebar screen (Dashboard, Runs, Security, …) plus MenuBar, Settings and Help | Yes |
 | `BrewUpdates/Views/Shared/` | `ContentView` (the window's sidebar and detail), `Components` (cards, badges), `SidebarFooter` | Yes |
 | `BrewUpdates/Resources/` | `Assets.xcassets` (icon, colors) and `brew-askpass.sh` | — |
-| `BrewUpdatesTests/` | Unit tests for Models and Services | No |
+| `BrewUpdatesTests/` | Unit tests: `Models/` and `Services/` mirror the app's folders with one `<File>Tests.swift` per source file; `Support/` holds shared fixtures and `TemporaryHome` | No |
 | `Icon/` | The app icon's SVG source and `make-icon.sh`, which renders it into the asset catalog | — |
 | `project.yml` | XcodeGen definition the Xcode project is generated from | — |
 

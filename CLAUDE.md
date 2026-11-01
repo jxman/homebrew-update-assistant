@@ -48,7 +48,7 @@ The `scripts/setup.sh` script will:
 
 **NEVER edit `~/bin/brew-updates.command` directly** - always edit the source and deploy.
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for full deployment workflow.
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for full deployment workflow.
 
 ### Testing
 ```bash
@@ -104,7 +104,7 @@ shellcheck brew-updates.command
 - Uninstall (Installed view, Doctor's Clear Record) goes through `UninstallPlan`: full names, `--formula`/`--cask` when the selection is one kind, and when other installed formulae need a selected one (from `runtime_dependencies`; brew then removes none of the formulae) the dialog offers only `includingDependents`, the selection plus everything that needs it. Never pass `--ignore-dependencies` or `--zap`
 - `brewupdates://run/<RUN_ID>` and `brewupdates://<section>` links are parsed by `AppLink`
 - Notifications: one per run, sent from the script's EXIT trap after the summary. When `~/.brew_logs/.brew-updates-app` points at an existing app, the app shows it (`NotificationService`, `UNUserNotificationCenter`, built by `RunNotification` from the summary's `notifications_enabled`); the script only starts the app if it isn't running (`open -g --env BREW_UPDATES_BACKGROUND_LAUNCH=1`, which suppresses the window). Otherwise the script falls back to `osascript`. terminal-notifier is no longer used
-- Tests (Swift Testing) compile `Models/` and `Services/` directly into an unhosted test bundle. Hosted tests hang because a menu bar app never quits
+- Tests (Swift Testing) compile `Models/` and `Services/` directly into an unhosted test bundle. Hosted tests hang because a menu bar app never quits. Test files mirror the source: `BrewUpdatesTests/Models/<File>Tests.swift` and `Services/<File>Tests.swift` for `<File>.swift`; shared fixtures and helpers go in `Support/`
 - Build/test from the terminal with the default DerivedData (`~/Library/Developer`). A `-derivedDataPath` inside `~/Documents` makes `xctest` block on a Documents permission prompt:
   ```bash
   cd app && xcodebuild -project BrewUpdates.xcodeproj -scheme BrewUpdates -destination 'platform=macOS,arch=arm64' test

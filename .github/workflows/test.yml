@@ -77,7 +77,7 @@ jobs:
       run: test -f LICENSE
 
     - name: Check CHANGELOG exists
-      run: test -f docs/CHANGELOG.md
+      run: test -f CHANGELOG.md
 
     - name: Check CONTRIBUTING exists
       run: test -f docs/CONTRIBUTING.md

@@ -382,7 +382,7 @@ show_summary() {
     echo "  Uninstall (keep data):"
     echo "    ${GREEN}./scripts/uninstall.sh${NC}"
     echo ""
-    echo -e "${BLUE}📚 For more information, see README.md and DEPLOYMENT.md${NC}\n"
+    echo -e "${BLUE}📚 For more information, see README.md and docs/DEPLOYMENT.md${NC}\n"
 }
 
 # Main execution

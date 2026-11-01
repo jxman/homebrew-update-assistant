@@ -145,7 +145,7 @@ cd homebrew-update-assistant
 ./scripts/install-app.sh    # optional: build the app into /Applications (+ Desktop alias)
 ```
 
-`setup.sh` copies the script to `~/bin/` and creates `~/.brew_logs`, `~/.brew_backups` and a sample `~/.brew_update_config`. It installs the LaunchAgent (or keeps the existing one so a custom schedule survives), reloads it with `launchctl bootout` and `bootstrap`, checks the dependencies above and confirms the deployed checksum. See [DEPLOYMENT.md](DEPLOYMENT.md) for reinstalling, uninstalling and custom schedules.
+`setup.sh` copies the script to `~/bin/` and creates `~/.brew_logs`, `~/.brew_backups` and a sample `~/.brew_update_config`. It installs the LaunchAgent (or keeps the existing one so a custom schedule survives), reloads it with `launchctl bootout` and `bootstrap`, checks the dependencies above and confirms the deployed checksum. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for reinstalling, uninstalling and custom schedules.
 
 You can also run the script straight from the repo without installing it: `./brew-updates.command --dry-run`. On macOS the `.command` extension makes it double-clickable in Finder.
 
@@ -405,14 +405,13 @@ Exclusions match exact names (`node` doesn't exclude `node@20`), and pinned form
 │   │   ├── Services/           # Files, brew, launchctl, notifications (unit-tested)
 │   │   ├── Views/              # One folder per screen (Dashboard, Runs, …), plus Shared/
 │   │   └── Resources/          # Assets.xcassets, brew-askpass.sh
-│   ├── BrewUpdatesTests/       # Swift Testing, unhosted
+│   ├── BrewUpdatesTests/       # Swift Testing, unhosted: Models/ and Services/ mirror the app, Support/ holds fixtures
 │   ├── Icon/                   # AppIcon.svg + make-icon.sh
 │   └── GUIDE.md                # Xcode workflow and SwiftUI walkthrough
 ├── docs/
 │   ├── images/                 # README logo (rendered from app/Icon/AppIcon.svg), app screenshots, tour GIF
-│   ├── CHANGELOG.md            # Script and app release history
 │   ├── run-summary-schema.md   # summary.json contract between script and app
-│   ├── IMPROVEMENTS.md         # Ideas backlog
+│   ├── DEPLOYMENT.md           # LaunchAgent management, custom schedules, cron, uninstalling
 │   ├── CONTRIBUTING.md
 │   ├── PRE_COMMIT_SETUP.md
 │   ├── SECURITY_SETUP_SUMMARY.md
@@ -421,7 +420,7 @@ Exclusions match exact names (`node` doesn't exclude `node@20`), and pinned form
 ├── hooks/                      # pre-commit hooks: swiftlint.sh, ggshield.sh, check-executable.sh
 ├── .github/workflows/test.yml  # Syntax, ShellCheck, app build + tests
 ├── .pre-commit-config.yaml
-├── DEPLOYMENT.md
+├── CHANGELOG.md                # Script and app release history
 └── CLAUDE.md
 ```
 
@@ -459,9 +458,9 @@ pip install pre-commit && pre-commit install
 
 Never edit `~/bin/brew-updates.command` directly. Edit the source here and run `setup.sh` again. Check that the two copies match with `md5 brew-updates.command ~/bin/brew-updates.command`.
 
-**Versions:** the script uses `SCRIPT_VERSION` (currently 2.3.0) and the app uses `MARKETING_VERSION` in `app/project.yml` (currently 1.0.0, tagged `app-vX.Y.Z`). Both are tracked in [docs/CHANGELOG.md](docs/CHANGELOG.md). The app checks `SystemStatus.minimumScriptVersion` and warns if the deployed script is too old.
+**Versions:** the script uses `SCRIPT_VERSION` (currently 2.5.0) and the app uses `MARKETING_VERSION` in `app/project.yml` (currently 1.2.0, tagged `app-vX.Y.Z`). Both are tracked in [CHANGELOG.md](CHANGELOG.md). The app checks `SystemStatus.minimumScriptVersion` and warns if the deployed script is too old.
 
-LaunchAgent management, custom schedules, cron and uninstalling are in [DEPLOYMENT.md](DEPLOYMENT.md).
+LaunchAgent management, custom schedules, cron and uninstalling are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Sharing with others
 
@@ -517,7 +516,13 @@ For anything else, run `--dry-run --verbose` and read the run's `.log` and `.doc
 
 ## Roadmap
 
-Shipped work is listed in [docs/CHANGELOG.md](docs/CHANGELOG.md). Open ideas are tracked in [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md). Python/uv updates are deliberately out of scope here and belong in a separate script.
+Shipped work is listed in [CHANGELOG.md](CHANGELOG.md). Open ideas:
+
+- **Config commands** for the script: `--check-config` (report invalid values, which `load_config` currently skips silently) and `--show-config` (the merged settings from defaults, config file and env vars).
+- **Package statistics**: which packages update most often or fail repeatedly, from the run summaries the app already reads.
+- **Brewfile history in git**: optionally commit each backup Brewfile to a local repo, so changes over time can be diffed.
+
+Python/uv updates are deliberately out of scope here and belong in a separate script.
 
 ---
 
