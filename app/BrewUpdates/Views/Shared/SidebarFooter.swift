@@ -11,7 +11,7 @@ struct SidebarFooter: View {
             NSApplication.shared.orderFrontStandardAboutPanel(nil)
         } label: {
             HStack(spacing: 10) {
-                // The same artwork as the Dock and Finder (Assets.xcassets/AppIcon)
+                // The same artwork as the Dock and Finder (Resources/Assets.xcassets/AppIcon)
                 Image(nsImage: NSApplication.shared.applicationIconImage)
                     .resizable()
                     .frame(width: 32, height: 32)

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### SwiftUI App
+
+#### Changed
+- Source folders: `App/` (entry point, `AppDelegate` in its own file), `State/` (`AppModel` and
+  the other `@Observable` models), `Resources/` (asset catalog), and `Views/` grouped into one
+  folder per screen plus `Shared/`. Files moved only; no behaviour changes
+
 ## [App 1.2.0] - 2026-11-01
 
 The app shows each run's notification itself, with its own icon. Needs script 2.5.0 for

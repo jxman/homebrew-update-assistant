@@ -398,7 +398,13 @@ Exclusions match exact names (`node` doesn't exclude `node@20`), and pinned form
 │   └── fix-vulnerabilities.sh  # Upgrade formulae that carry vulnerable dependencies, rescan
 ├── app/
 │   ├── project.yml             # XcodeGen source of truth (BrewUpdates.xcodeproj is generated, gitignored)
-│   ├── BrewUpdates/            # Models/ → Services/ → AppModel → Views/, Resources/brew-askpass.sh
+│   ├── BrewUpdates/
+│   │   ├── App/                # @main entry point, AppDelegate
+│   │   ├── State/              # AppModel (+ extensions), DoctorModel, SecurityScanModel, LiveRun
+│   │   ├── Models/             # Pure data and parsing, no UI (unit-tested)
+│   │   ├── Services/           # Files, brew, launchctl, notifications (unit-tested)
+│   │   ├── Views/              # One folder per screen (Dashboard, Runs, …), plus Shared/
+│   │   └── Resources/          # Assets.xcassets, brew-askpass.sh
 │   ├── BrewUpdatesTests/       # Swift Testing, unhosted
 │   ├── Icon/                   # AppIcon.svg + make-icon.sh
 │   └── GUIDE.md                # Xcode workflow and SwiftUI walkthrough

@@ -40,13 +40,15 @@ and run lock. The only direct changes are `brew pin`/`unpin`, the settings in
 
 | Folder | What lives there | Has UI code? |
 |--------|------------------|--------------|
+| `BrewUpdates/App/` | The `@main` entry point (scenes) and `AppDelegate` (Quit confirmation, notification clicks) | Scenes only |
+| `BrewUpdates/State/AppModel.swift` | The single shared state object the screens read, and the actions (run, stop, pin, exclude) | No (but drives the UI) |
+| `BrewUpdates/State/AppModel+*.swift` | The model split by topic: restore and uninstall (`+Packages`), notifications, sidebar sections | No |
+| `BrewUpdates/State/LiveRun.swift`, `DoctorModel.swift`, `SecurityScanModel.swift` | A run started from the app, brew doctor reports plus Check Now, and Scan Now | No |
 | `BrewUpdates/Models/` | Plain data types and parsers (run summary, logs, schedule, grype and brew vulns reports) | No |
-| `BrewUpdates/Services/` | Talking to the system: files, `brew`, `launchctl` | No |
-| `BrewUpdates/AppModel.swift` | The single shared state object the screens read, and the actions (run, stop, pin, exclude) | No (but drives the UI) |
-| `BrewUpdates/AppModel+Packages.swift` | Restore and uninstall: brew commands run with live output while holding the run lock | No |
-| `BrewUpdates/LiveRun.swift` | Output and state of a run started from the app | No |
-| `BrewUpdates/DoctorModel.swift` | brew doctor reports from all runs, plus Check Now | No |
-| `BrewUpdates/Views/` | SwiftUI screens and small components | Yes |
+| `BrewUpdates/Services/` | Talking to the system: files, `brew`, `launchctl`, notifications | No |
+| `BrewUpdates/Views/<Screen>/` | SwiftUI screens, one folder per sidebar screen (Dashboard, Runs, Security, …) plus MenuBar, Settings and Help | Yes |
+| `BrewUpdates/Views/Shared/` | `ContentView` (the window's sidebar and detail), `Components` (cards, badges), `SidebarFooter` | Yes |
+| `BrewUpdates/Resources/` | `Assets.xcassets` (icon, colors) and `brew-askpass.sh` | — |
 | `BrewUpdatesTests/` | Unit tests for Models and Services | No |
 | `Icon/` | The app icon's SVG source and `make-icon.sh`, which renders it into the asset catalog | — |
 | `project.yml` | XcodeGen definition the Xcode project is generated from | — |
@@ -116,7 +118,7 @@ right-click › **Open** the first time: it isn't notarized, so a plain double-c
 ### Previews
 
 Every screen file ends with a `#Preview { ... }` block. Open, say,
-`Views/DashboardView.swift` and press ⌥⌘↩: the canvas renders the view, and edits to the
+`Views/Dashboard/DashboardView.swift` and press ⌥⌘↩: the canvas renders the view, and edits to the
 layout update it within a second or two. Previews here use a real `AppModel()`, so they show
 your actual runs and packages. If a preview stops updating, press ⌥⌘P.
 
@@ -163,7 +165,7 @@ A view is a `struct` conforming to `View` with a `body` describing what to show.
 `body` again whenever the data it depends on changes. You never update the screen by hand.
 
 ```swift
-struct StatusBadge: View {          // Views/Components.swift
+struct StatusBadge: View {          // Views/Shared/Components.swift
     let status: RunStatus
     var body: some View {
         Label(status.title, systemImage: status.systemImage)
@@ -179,7 +181,7 @@ out the nested type.
 
 `.padding()`, `.background(...)` and `.font(...)` each return a *new* view wrapping the old one.
 `.padding().background(.red)` colours the padded area; `.background(.red).padding()` colours
-only the content and pads outside it. See `Card` in `Views/Components.swift`.
+only the content and pads outside it. See `Card` in `Views/Shared/Components.swift`.
 
 ### 3. Layout containers
 

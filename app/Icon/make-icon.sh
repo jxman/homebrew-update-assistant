@@ -6,7 +6,7 @@ set -euo pipefail
 
 icon_dir="$(cd "$(dirname "$0")" && pwd)"
 svg="$icon_dir/AppIcon.svg"
-out="$icon_dir/../BrewUpdates/Assets.xcassets/AppIcon.appiconset"
+out="$icon_dir/../BrewUpdates/Resources/Assets.xcassets/AppIcon.appiconset"
 mkdir -p "$out"
 
 # macOS needs each size at 1x and 2x: 16, 32, 128, 256 and 512 points
