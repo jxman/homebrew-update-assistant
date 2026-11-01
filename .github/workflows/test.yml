@@ -39,7 +39,6 @@ jobs:
         scandir: '.'
         format: gcc
         severity: warning
-          .github
 
   macos-app:
     name: SwiftUI app build & tests
