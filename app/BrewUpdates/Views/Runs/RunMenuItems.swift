@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The Run menu in the macOS menu bar: Dry Run (⇧⌘U), Update All… (⌘U), and Stop (⌘.) while
+/// The Run menu in the macOS menu bar: Check for Updates (⇧⌘U), Update All… (⌘U), and Stop (⌘.) while
 /// the app's own run is going. Commands can't read `@Environment(AppModel.self)`, so the model
 /// is passed in; reading its properties in `body` still updates the menu when they change.
 struct RunMenuItems: View {
@@ -12,7 +12,7 @@ struct RunMenuItems: View {
             Button("Stop") { model.stopLiveRun() }
                 .keyboardShortcut(".")
         } else {
-            Button(ScriptAction.dryRun.title) { start(.dryRun) }
+            Button(ScriptAction.check.title) { start(.check) }
                 .keyboardShortcut("u", modifiers: [.command, .shift])
                 .disabled(!model.canStartRun)
             Button("\(ScriptAction.update.title)…") { start(.update) }

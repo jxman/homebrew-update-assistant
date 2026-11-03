@@ -21,13 +21,13 @@ struct RunNotification: Equatable, Sendable {
         runID = summary.runId
         isFromApp = summary.trigger == "app"
 
-        let noun = summary.dryRun ? "Dry run" : "Update"
+        let noun = summary.isCheck ? "Check" : summary.dryRun ? "Dry run" : "Update"
         let upgraded = summary.upgraded.all.count
         let failed = summary.failed.all.count
         let outdated = summary.outdated.all.count
         switch summary.runStatus {
         case .success where summary.dryRun:
-            title = "Dry run finished"
+            title = "\(noun) finished"
             body = outdated > 0 ? "\(Self.packages(outdated)) can be upgraded" : "Everything is up to date"
         case .success:
             title = "Update finished"

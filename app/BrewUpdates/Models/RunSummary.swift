@@ -11,6 +11,8 @@ struct RunSummary: Codable, Sendable, Equatable {
         let skipCleanup: Bool
         let skipSecurityScan: Bool
         let packages: [String]
+        /// `--check` (script 2.6.0+; nil before): a dry run that ran `brew update` first
+        let check: Bool?
     }
 
     /// A package with the version it was upgraded from and to.
@@ -132,6 +134,15 @@ struct RunSummary: Codable, Sendable, Equatable {
     let files: Files
 
     var runStatus: RunStatus { RunStatus(rawValue: status) ?? .unknown }
+
+    /// A "Check for Updates" run: a dry run against a freshly updated package index
+    var isCheck: Bool { dryRun && options.check == true }
+
+    /// The tag shown for runs that changed nothing, or nil for real updates
+    var previewLabel: String? {
+        guard dryRun else { return nil }
+        return isCheck ? "check" : "dry run"
+    }
 
     static func decode(from data: Data) throws -> RunSummary {
         let decoder = JSONDecoder()

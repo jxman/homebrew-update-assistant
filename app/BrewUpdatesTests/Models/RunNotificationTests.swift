@@ -38,6 +38,14 @@ struct RunNotificationTests {
         #expect(notification.title == "Dry run finished")
         #expect(notification.body == "2 packages can be upgraded")
         #expect(notification.isFromApp)
+
+        let check = try Self.summary([
+            #""status": "partial""#: #""status": "success""#,
+            #""dry_run": false"#: #""dry_run": true"#,
+            #""packages": [] }"#: #""packages": [], "check": true }"#
+        ])
+        #expect(RunNotification(summary: check).title == "Check finished")
+        #expect(RunNotification(summary: check).body == "2 packages can be upgraded")
     }
 
     @Test func describesFailedAndCancelledRuns() throws {

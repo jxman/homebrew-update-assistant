@@ -75,9 +75,9 @@ struct MenuBarView: View {
                 model.request(.update)
             }
             .disabled(!model.canStartRun)
-            Button("Dry Run") {
+            Button(ScriptAction.check.title) {
                 showMainWindow()
-                model.request(.dryRun)
+                model.request(.check)
             }
             .disabled(!model.canStartRun)
         }

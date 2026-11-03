@@ -278,8 +278,8 @@ struct RunRow: View {
             if let trigger = run.summary?.trigger {
                 Pill(text: trigger)
             }
-            if run.summary?.dryRun == true {
-                Pill(text: "dry run", color: .purple)
+            if let label = run.summary?.previewLabel {
+                Pill(text: label, color: .purple)
             }
         }
         .padding(.vertical, 2)

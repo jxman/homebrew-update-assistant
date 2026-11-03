@@ -4,7 +4,7 @@ import Testing
 /// Runs a stand-in for the deployed script from a temporary home directory.
 @Suite("Script runner")
 struct ScriptRunnerTests {
-    private func launch(script: String, in home: TemporaryHome, action: ScriptAction = .dryRun) async throws -> LaunchedProcess {
+    private func launch(script: String, in home: TemporaryHome, action: ScriptAction = .check) async throws -> LaunchedProcess {
         let paths = AppPaths(home: home.url)
         try FileManager.default.createDirectory(at: paths.deployedScript.deletingLastPathComponent(), withIntermediateDirectories: true)
         try script.write(to: paths.deployedScript, atomically: true, encoding: .utf8)

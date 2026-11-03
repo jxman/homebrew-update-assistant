@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [App 1.3.0] - 2026-11-03
+
+**Dry Run** becomes **Check for Updates**, which fetches the latest package versions first.
+Needs script 2.6.0.
+
+### SwiftUI App
+
+#### Changed
+- **Dry Run** is now **Check for Updates** (⇧⌘U, magnifying-glass icon) in the toolbar, Run
+  menu and menu bar. It runs the script with `--check`, so it fetches the latest versions
+  before listing what's outdated. Runs, Dashboard and notifications say "check" for these
+  runs ("Check finished") and keep "dry run" for plain `--dry-run` runs. Needs script 2.6.0
+  (`minimumScriptVersion`)
+- Source folders: `App/` (entry point, `AppDelegate` in its own file), `State/` (`AppModel` and
+  the other `@Observable` models), `Resources/` (asset catalog), and `Views/` grouped into one
+  folder per screen plus `Shared/`. Files moved only; no behaviour changes
+- Tests: one file per source file it covers, in `Models/` and `Services/` folders that mirror
+  the app, with shared fixtures in `Support/` (the empty `Fixtures/` folder is gone). Same
+  116 tests
+- `RunLock` moved out of `BackupStore.swift` into its own `Services/RunLock.swift`, next to
+  its tests; unchanged
+
+## [2.6.0] - 2026-11-03
+
+### Added
+- `--check`: a dry run that runs `brew update` first, so the list of pending
+  upgrades is current instead of coming from the last scheduled run's package index. Only
+  Homebrew and its index change; no installed package is upgraded. The summary records it as
+  `options.check`. Plain `--dry-run` is unchanged and still skips `brew update`
+
 ### Changed
 - `CHANGELOG.md` moved to the repo root and `DEPLOYMENT.md` into `docs/`. The old
   `docs/IMPROVEMENTS.md` backlog (from 2024, almost all shipped) is replaced by the three
@@ -17,18 +47,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when an action used in the workflows has a new release
 - CI ShellCheck step pinned to `ludeeus/action-shellcheck@2.0.0` instead of `@master`, and its
   unsupported `exclude_paths` option (ignored with a warning) removed
-
-### SwiftUI App
-
-#### Changed
-- Source folders: `App/` (entry point, `AppDelegate` in its own file), `State/` (`AppModel` and
-  the other `@Observable` models), `Resources/` (asset catalog), and `Views/` grouped into one
-  folder per screen plus `Shared/`. Files moved only; no behaviour changes
-- Tests: one file per source file it covers, in `Models/` and `Services/` folders that mirror
-  the app, with shared fixtures in `Support/` (the empty `Fixtures/` folder is gone). Same
-  116 tests
-- `RunLock` moved out of `BackupStore.swift` into its own `Services/RunLock.swift`, next to
-  its tests; unchanged
 
 ## [App 1.2.0] - 2026-11-01
 

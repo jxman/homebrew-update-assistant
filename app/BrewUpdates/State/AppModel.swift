@@ -245,7 +245,7 @@ final class AppModel {
 // MARK: - Actions
 
 extension AppModel {
-    /// Starts a dry run straight away; anything that changes the system asks first.
+    /// Starts a check straight away; anything that changes installed packages asks first.
     func request(_ action: ScriptAction) {
         if action.changesSystem {
             pendingAction = action

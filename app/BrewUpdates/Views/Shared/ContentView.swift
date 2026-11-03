@@ -30,7 +30,7 @@ struct ContentView: View {
             }
         }
         .toolbar {
-            // A group so Dry Run and Update All sit side by side as separate buttons
+            // A group so Check for Updates and Update All sit side by side as separate buttons
             ToolbarItemGroup {
                 RunControl()
             }
@@ -127,8 +127,9 @@ struct ContentView: View {
                 + "skipping pinned and excluded ones. " + steps
         case .upgrade(let packages):
             return "Updates Homebrew and upgrades \(packages.joined(separator: ", ")). " + steps
-        case .dryRun:
-            return "Shows what would be upgraded without changing anything."
+        case .check:
+            return "Updates Homebrew's package index and shows what would be upgraded, "
+                + "without upgrading anything."
         }
     }
 
@@ -154,7 +155,7 @@ struct ContentView: View {
     }
 }
 
-/// Toolbar controls: Dry Run and Update All side by side, or Stop while the app's run is active.
+/// Toolbar controls: Check for Updates and Update All side by side, or Stop while the app's run is active.
 /// The keyboard shortcuts live in the Run menu (`RunMenuItems`), so they aren't repeated here.
 private struct RunControl: View {
     @Environment(AppModel.self) private var model
@@ -176,13 +177,14 @@ private struct RunControl: View {
         } else {
             // Toolbars show icons only by default; `.titleAndIcon` keeps the words visible
             Button {
-                model.request(.dryRun)
+                model.request(.check)
             } label: {
-                Label(ScriptAction.dryRun.title, systemImage: ScriptAction.dryRun.systemImage)
+                Label(ScriptAction.check.title, systemImage: ScriptAction.check.systemImage)
             }
             .labelStyle(.titleAndIcon)
             .disabled(!model.canStartRun)
-            .help("See what would be upgraded, without changing anything (⇧⌘U)")
+            .help("Fetch the latest package versions and see what would be upgraded, scan for "
+                + "vulnerabilities and run brew doctor, without upgrading anything (⇧⌘U)")
 
             Button {
                 model.request(.update)

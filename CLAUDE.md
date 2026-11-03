@@ -85,7 +85,7 @@ shellcheck brew-updates.command
 
 ## SwiftUI App (`app/`)
 
-- Native macOS app (menu bar + window), Swift 6, macOS 15+. Phases 1–4 done (viewing; run/dry run/upgrade selected with live output, pin and exclude; Settings window; menu bar/Dock status, backup compare/restore, notification links)
+- Native macOS app (menu bar + window), Swift 6, macOS 15+. Phases 1–4 done (viewing; run/check for updates/upgrade selected with live output, pin and exclude; Settings window; menu bar/Dock status, backup compare/restore, notification links)
 - The Xcode project is **generated** by XcodeGen from `app/project.yml` and is gitignored. Run `cd app && xcodegen generate` after adding/removing files; never change settings in Xcode's project editor
 - Layout (`app/BrewUpdates/`): `App/` (`@main`, `AppDelegate`) · `Models/` (pure parsing, no UI) → `Services/` (files, `brew`, `launchctl`, notifications) → `State/` (`AppModel` + `AppModel+*.swift`, `@Observable`, `@MainActor`) → `Views/<Screen>/` (one folder per sidebar screen, shared pieces in `Views/Shared/`) · `Resources/` (asset catalog, bundled scripts). Only `Models/` and `Services/` are compiled into the tests, so keep UI out of them
 - The app must only ever invoke the **deployed** `~/bin/brew-updates.command`, read run data via `*.summary.json` (docs/run-summary-schema.md), and check `SystemStatus.minimumScriptVersion`

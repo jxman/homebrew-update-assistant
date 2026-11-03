@@ -110,10 +110,12 @@ enum HelpTopic: String, CaseIterable, Identifiable {
                 + "Each run backs up your package list, updates Homebrew, upgrades outdated packages, "
                 + "runs `brew doctor`, checks for deprecated packages, scans for vulnerabilities and "
                 + "cleans up.",
-            "The app shows the results of those runs and lets you act on them. **Dry Run** (⇧⌘U) "
+            "The app shows the results of those runs and lets you act on them. **Check for Updates** (⇧⌘U) "
                 + "and **Update All** (⌘U) in the toolbar, also in the **Run** menu, run the same script, "
                 + "so a run from the app gets the same backup, logs and summary as a scheduled one. "
-                + "A dry run shows what would change without changing anything; Update All shows how "
+                + "Check for Updates fetches the latest package versions (`brew update`), then shows "
+                + "what would be upgraded, scans for vulnerabilities and runs `brew doctor`, without "
+                + "upgrading anything. Update All shows how "
                 + "many packages it will upgrade and asks before starting. **Stop** (⌘.) cancels a run.",
             "Only one run can happen at a time. If a scheduled run is going, the app waits for it.",
             "If the app says the script is missing or too old, run `./scripts/setup.sh` in the "
@@ -167,7 +169,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             "The chart shows each scanner's count over time; pick a range above it. They count different "
                 + "things, so compare their trends, not their heights. **Fix Available** shows how long a "
                 + "fixed version has been out (grype only).",
-            "Every run scans, dry runs included. **Scan Now** (⇧⌘S) runs both scans straight away; "
+            "Every run scans, checks included. **Scan Now** (⇧⌘S) runs both scans straight away; "
                 + "its result is shown but not saved. grype needs `brew install --cask grype`."
         ]
         case .doctor: [
@@ -202,7 +204,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             "The mug in the menu bar shows the number of outdated packages. It turns into arrows "
                 + "while a run is going and a warning triangle when the last run failed. The Dock icon "
                 + "shows the same count.",
-            "Its menu shows the last and next run, and lets you start an update or dry run, open the "
+            "Its menu shows the last and next run, and lets you start an update or a check, open the "
                 + "app or Settings, or stop a run.",
             "When notifications are on (Settings → Updates), each run ends with one notification saying "
                 + "what happened. Clicking it opens that run. If the app isn't running, the script starts "

@@ -24,7 +24,7 @@ flowchart LR
     subgraph app["Brew Updates app"]
         services["Services/<br/>RunStore, BrewService, SystemStatus,<br/>ScriptRunner, ConfigEditor,<br/>LaunchAgentService, BackupStore"] --> model["AppModel + LiveRun<br/>+ DoctorModel<br/>(shared state)"]
         model --> views["Views/<br/>Dashboard, Installed, Runs, Security,<br/>Doctor, Backups, Settings, menu bar"]
-        views -- "Update, Dry Run, Upgrade,<br/>Pin, Exclude, Restore,<br/>Save settings" --> model
+        views -- "Update, Check, Upgrade,<br/>Pin, Exclude, Restore,<br/>Save settings" --> model
     end
     logs --> services
     brew["brew info / pin / unpin / doctor"] <--> services
@@ -33,7 +33,7 @@ flowchart LR
     services -- "runs with --yes --no-color<br/>(live output)" --> script
 ```
 
-The app never upgrades anything itself: **Update All**, **Dry Run** and **Upgrade** all run the
+The app never upgrades anything itself: **Update All**, **Check for Updates** and **Upgrade** all run the
 same deployed script the LaunchAgent uses, so every run gets the same backup, logs, summary
 and run lock. The only direct changes are `brew pin`/`unpin`, the settings in
 `~/.brew_update_config` (exclusions and the Settings window), and the LaunchAgent's schedule.
@@ -470,13 +470,13 @@ A plain `Text(someString)` would show the asterisks literally.
 ### 28. Toolbar buttons with text, and a menu of your own
 
 The toolbar's `RunControl` used to be one `Menu` with a `primaryAction`: clicking ran Update
-All and the small arrow hid Dry Run. Now it's two plain `Button`s inside a `ToolbarItemGroup`,
+All and the small arrow hid Dry Run (now Check for Updates). Now it's two plain `Button`s inside a `ToolbarItemGroup`,
 which lays several controls out side by side:
 
 - `.labelStyle(.titleAndIcon)` keeps the words. In a toolbar a `Label` normally shows only
   its icon.
 - `.buttonStyle(.borderedProminent)` fills Update All with the accent colour, so the button
-  that changes things stands out from Dry Run.
+  that changes things stands out from Check for Updates.
 
 `CommandMenu("Run") { RunMenuItems(model: model) }` adds a whole new menu to the menu bar
 (compare `CommandGroup`, which adds to or replaces part of an existing one). Menu items get
@@ -545,7 +545,8 @@ scene then keeps the main window closed, so only the menu bar icon and the notif
 
 ## Trying the actions safely
 
-- **Dry Run** (toolbar Update menu ▾, or the menu bar) changes nothing and shows the live output.
+- **Check for Updates** (toolbar, ⇧⌘U, or the menu bar) runs `brew update` to fetch the latest
+  package versions, then upgrades nothing and shows the live output.
   Try **Stop** partway through. The run appears in the list as *Cancelled*.
 - **Exclude from Updates** edits `~/.brew_update_config`; **Include** puts it back. Open the
   file to watch the `EXCLUDED_FORMULAE=` line change while your comments stay.
@@ -612,7 +613,7 @@ Small, safe changes for practice. Use previews (⌥⌘↩) to see the result imm
 | A cask you installed isn't in the Installed list | Homebrew can't read its definition (often a tap that a Homebrew update broke), so it skips it. Doctor lists it with Homebrew's error and a link to report it to the tap |
 | A self-updating cask looks out of date | Homebrew doesn't upgrade `auto_updates` casks, so its record is old. The Installed column shows the app's own version; "Update pending" means the app hasn't updated itself yet — open it |
 | A password dialog from "Brew Updates" appears during an uninstall or restore | Expected: brew needs administrator rights to remove or install system files (installer receipts, background helpers). It comes from the app's `brew-askpass.sh`; Cancel stops that step |
-| Update / Dry Run greyed out | A run is already in progress (scheduled or from Terminal), or the deployed script is older than the app needs (see the orange banner) |
+| Update All / Check for Updates greyed out | A run is already in progress (scheduled or from Terminal), or the deployed script is older than the app needs (see the orange banner) |
 | Run ends at once with "Another update is already running" | Exit code 5: another run holds `~/.brew_logs/.brew-updates.lock`. Wait for it, or check the Runs list |
 | Preview shows an error or stops updating | ⌥⌘P to refresh; ⌘⇧K then ⌘B if it persists |
 | Dock or Finder still shows the old (or generic) app icon | macOS caches icons. Quit the app, run `touch "$(ls -d ~/Library/Developer/Xcode/DerivedData/BrewUpdates-*/Build/Products/Debug/Brew\ Updates.app)"` and relaunch; if it persists, `killall Dock` |

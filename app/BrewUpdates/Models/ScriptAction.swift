@@ -4,15 +4,16 @@ import Foundation
 enum ScriptAction: Sendable, Equatable {
     /// Upgrade everything outdated, like the scheduled run
     case update
-    /// Show what would be upgraded without changing anything
-    case dryRun
+    /// Refresh Homebrew's package index, then show what would be upgraded (`--check`).
+    /// No installed package changes.
+    case check
     /// Upgrade only these packages (`--packages`)
     case upgrade(packages: [String])
 
     var title: String {
         switch self {
         case .update: "Update All"
-        case .dryRun: "Dry Run"
+        case .check: "Check for Updates"
         case .upgrade(let packages): packages.count == 1 ? "Upgrade \(packages[0])" : "Upgrade \(packages.count) Packages"
         }
     }
@@ -20,13 +21,13 @@ enum ScriptAction: Sendable, Equatable {
     var systemImage: String {
         switch self {
         case .update: "arrow.down.circle"
-        case .dryRun: "eye"
+        case .check: "magnifyingglass"
         case .upgrade: "arrow.up.circle"
         }
     }
 
-    /// Dry runs only report, so they start without asking for confirmation
-    var changesSystem: Bool { self != .dryRun }
+    /// A check only refreshes the index and reports, so it starts without asking for confirmation
+    var changesSystem: Bool { self != .check }
 
     /// `--yes` because there is no terminal to answer prompts, `--no-color` because the
     /// output is shown as plain text.
@@ -35,8 +36,8 @@ enum ScriptAction: Sendable, Equatable {
         switch self {
         case .update:
             break
-        case .dryRun:
-            arguments.append("--dry-run")
+        case .check:
+            arguments.append("--check")
         case .upgrade(let packages):
             arguments += ["--packages", packages.joined(separator: " ")]
         }

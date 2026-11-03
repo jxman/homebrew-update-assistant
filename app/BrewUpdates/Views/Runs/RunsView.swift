@@ -187,7 +187,7 @@ private struct RunSummaryHeader: View {
             // Wraps onto another line when the pane is narrow instead of widening it
             FlowLayout(spacing: 6) {
                 Pill(text: summary.trigger)
-                if summary.dryRun { Pill(text: "dry run", color: .purple) }
+                if let label = summary.previewLabel { Pill(text: label, color: .purple) }
                 Pill(text: summary.durationSeconds.durationDescription)
                 Pill(text: "exit \(summary.exitCode)", color: summary.exitCode == 0 ? .green : .red)
                 Pill(text: "doctor: \(summary.doctor.status)")

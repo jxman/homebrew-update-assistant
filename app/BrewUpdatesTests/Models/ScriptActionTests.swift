@@ -5,12 +5,12 @@ import Testing
 struct ScriptActionTests {
     @Test func buildsArguments() {
         #expect(ScriptAction.update.arguments == ["--yes", "--no-color"])
-        #expect(ScriptAction.dryRun.arguments == ["--yes", "--no-color", "--dry-run"])
+        #expect(ScriptAction.check.arguments == ["--yes", "--no-color", "--check"])
         #expect(ScriptAction.upgrade(packages: ["node", "git"]).arguments == ["--yes", "--no-color", "--packages", "node git"])
     }
 
-    @Test func onlyDryRunSkipsConfirmation() {
-        #expect(!ScriptAction.dryRun.changesSystem)
+    @Test func onlyCheckSkipsConfirmation() {
+        #expect(!ScriptAction.check.changesSystem)
         #expect(ScriptAction.update.changesSystem)
         #expect(ScriptAction.upgrade(packages: ["z3"]).changesSystem)
     }

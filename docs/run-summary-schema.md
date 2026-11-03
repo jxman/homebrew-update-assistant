@@ -44,12 +44,13 @@ instead of parsing the human-readable logs.
 | `duration_seconds` | int | Wall-clock duration |
 | `status` | string | See [Status values](#status-values) |
 | `exit_code` | int | Process exit code (see [Exit codes](#exit-codes)) |
-| `dry_run` | bool | `--dry-run` was used |
+| `dry_run` | bool | `--dry-run` or `--check` was used |
 | `notifications_enabled` | bool | `ENABLE_NOTIFICATIONS` was on (config file or env var), so the run asked for a notification. With the app installed, the app shows it from this summary. Missing before 2.5.0 |
 | `options.skip_casks` | bool | Casks skipped (flag or `SKIP_CASKS_BY_DEFAULT`) |
 | `options.skip_cleanup` | bool | Cleanup skipped (flag or `CLEANUP_BY_DEFAULT=false`) |
 | `options.skip_security_scan` | bool | `--skip-security-scan` was used (skips grype and brew vulns) |
 | `options.packages` | string[] | Names passed with `--packages` (empty means all outdated packages) |
+| `options.check` | bool | `--check` was used: a dry run that ran `brew update` first, so `outdated` reflects the latest package index. Missing before 2.6.0 |
 | `homebrew_version` | string | First line of `brew --version` (empty if the run failed earlier) |
 | `outdated.formulae` / `outdated.casks` | Package[] | Outdated packages selected for upgrade, after exclusions, pins and `--packages` |
 | `upgraded.formulae` / `upgraded.casks` | Package[] | Packages confirmed upgraded (no longer outdated afterwards) |
@@ -135,7 +136,8 @@ alive is treated as stale and removed. The app can check for this directory to s
     "skip_casks": false,
     "skip_cleanup": false,
     "skip_security_scan": false,
-    "packages": []
+    "packages": [],
+    "check": false
   },
   "homebrew_version": "Homebrew 7.0.10",
   "outdated": {

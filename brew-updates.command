@@ -14,7 +14,7 @@ set -o pipefail
 ###################
 # Configuration
 ###################
-readonly SCRIPT_VERSION="2.5.0"
+readonly SCRIPT_VERSION="2.6.0"
 # Version of the <run>.summary.json format consumed by the UI (see docs/run-summary-schema.md)
 readonly SUMMARY_SCHEMA_VERSION=1
 
@@ -58,6 +58,8 @@ NC='\033[0m' # No Color
 
 # Script options (can be set via command line)
 DRY_RUN=false
+# --check: a dry run that refreshes the package index (brew update) first
+CHECK_MODE=false
 VERBOSE=false
 AUTO_YES=false
 SKIP_CASKS=false
@@ -235,7 +237,9 @@ notify_run_finished() {
     outdated_count=$(count_words "$OUTDATED_FORMULAE $OUTDATED_CASKS")
     case "$exit_code" in
         0)
-            if [[ "$DRY_RUN" == true && $outdated_count -gt 0 ]]; then
+            if [[ "$CHECK_MODE" == true && $outdated_count -gt 0 ]]; then
+                message="🔍 Check: $outdated_count package(s) can be upgraded"
+            elif [[ "$DRY_RUN" == true && $outdated_count -gt 0 ]]; then
                 message="🔍 Dry run: $outdated_count package(s) can be upgraded"
             elif [[ $upgraded_count -gt 0 ]]; then
                 message="✅ Upgraded $upgraded_count package(s)"
@@ -382,6 +386,10 @@ Usage: $(basename "$0") [OPTIONS]
 
 OPTIONS:
     -d, --dry-run           Show what would be updated without making changes
+                            (uses the package index from the last brew update)
+        --check             Like --dry-run, but runs brew update first so the
+                            list of pending upgrades is current. Only Homebrew
+                            and its package index change, no installed packages
     -v, --verbose           Enable verbose logging
     -y, --yes               Automatically answer yes to prompts
     -s, --skip-casks        Skip cask updates
@@ -395,6 +403,7 @@ OPTIONS:
 EXAMPLES:
     $(basename "$0")                    # Interactive update
     $(basename "$0") --dry-run          # Preview updates only
+    $(basename "$0") --check            # Refresh the index, then preview updates
     $(basename "$0") --yes --verbose    # Automated update with verbose output
     $(basename "$0") --skip-casks       # Update formulae only
     $(basename "$0") --packages "node git" --yes   # Upgrade selected packages
@@ -418,6 +427,11 @@ parse_arguments() {
         case $1 in
             -d|--dry-run)
                 DRY_RUN=true
+                shift
+                ;;
+            --check)
+                DRY_RUN=true
+                CHECK_MODE=true
                 shift
                 ;;
             -v|--verbose)
@@ -772,7 +786,8 @@ confirm_action() {
 update_homebrew() {
     log_message "1️⃣  Updating Homebrew..."
 
-    if [[ "$DRY_RUN" == true ]]; then
+    # --check refreshes the index so the outdated list is current; a plain dry run doesn't
+    if [[ "$DRY_RUN" == true && "$CHECK_MODE" != true ]]; then
         log_message "🔍 DRY RUN: Would update Homebrew"
         return $EXIT_SUCCESS
     fi
@@ -1825,6 +1840,7 @@ write_run_summary() {
     "skip_casks": ${SKIP_CASKS},
     "skip_cleanup": ${SKIP_CLEANUP},
     "skip_security_scan": ${SKIP_SECURITY_SCAN},
+    "check": ${CHECK_MODE},
     "packages": $(json_names "$REQUESTED_PACKAGES")
   },
   "homebrew_version": $(json_string "$HOMEBREW_VERSION"),

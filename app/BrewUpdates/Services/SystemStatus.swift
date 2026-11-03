@@ -3,7 +3,7 @@ import Foundation
 /// Facts about the installation: deployed script, LaunchAgent, config and disk space.
 struct SystemStatus: Sendable {
     /// Oldest script that writes the summary files the app depends on
-    static let minimumScriptVersion = SemanticVersion("2.2.0")!
+    static let minimumScriptVersion = SemanticVersion("2.6.0")!
 
     let paths: AppPaths
 

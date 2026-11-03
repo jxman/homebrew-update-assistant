@@ -19,7 +19,7 @@ A scheduled Bash script that keeps Homebrew updated, backed up, health-checked a
 - **Health and security reports.** Every run saves a `brew doctor` report, a [Grype](https://github.com/anchore/grype) vulnerability scan of the Cellar, a `brew vulns` (OSV.dev) scan of installed formulae, and a list of deprecated or disabled packages.
 - **Machine-readable results.** Each run writes a `*.summary.json` and ends with one macOS notification; with the app installed, the app shows it and clicking it opens the run.
 - **Housekeeping visibility.** The app shows what you can clean up: packages nothing needs any more, deprecated or disabled packages, and packages with security issues you might want to upgrade, replace or remove.
-- **Menu bar and window app.** The app shows runs, installed packages, Security and Doctor findings, and backups. From it you can update, dry run, upgrade, pin, exclude, uninstall, restore and edit the schedule.
+- **Menu bar and window app.** The app shows runs, installed packages, Security and Doctor findings, and backups. From it you can update, check for updates, upgrade, pin, exclude, uninstall, restore and edit the schedule.
 
 ## Contents
 
@@ -180,6 +180,7 @@ The EXIT trap also runs on errors and on Ctrl-C/SIGINT, so every run that got th
 ```bash
 ./brew-updates.command                          # interactive
 ./brew-updates.command --dry-run --verbose      # preview, no changes
+./brew-updates.command --check                  # brew update, then preview (what the app's Check for Updates runs)
 ./brew-updates.command --yes                    # unattended
 ./brew-updates.command --packages "node git" --yes   # upgrade only these
 ./brew-updates.command --skip-casks --skip-cleanup   # quick formulae-only run
@@ -187,7 +188,8 @@ The EXIT trap also runs on errors and on Ctrl-C/SIGINT, so every run that got th
 
 | Option | Description |
 | --- | --- |
-| `-d, --dry-run` | Show what would be updated without making changes |
+| `-d, --dry-run` | Show what would be updated without making changes (uses the package index from the last `brew update`) |
+| `--check` | Like `--dry-run`, but runs `brew update` first so the pending upgrades are current. Only Homebrew and its index change, no installed packages |
 | `-v, --verbose` | Detailed logging |
 | `-y, --yes` | Answer yes to all prompts (automation mode) |
 | `-s, --skip-casks` | Formulae only |
@@ -275,12 +277,12 @@ flowchart TB
     launch -. "open fails" .-> osa
 ```
 
-- **With the app:** one notification per run, with the app's icon, saying what happened ("Upgraded 3 packages", "Dry run finished: 2 packages can be upgraded", "Update failed"). Clicking it opens that run. The app only announces runs that finished in the last 15 minutes and never the same run twice. Runs started from the app don't show a banner while the app is in front, only in Notification Center.
+- **With the app:** one notification per run, with the app's icon, saying what happened ("Upgraded 3 packages", "Check finished: 2 packages can be upgraded", "Update failed"). Clicking it opens that run. The app only announces runs that finished in the last 15 minutes and never the same run twice. Runs started from the app don't show a banner while the app is in front, only in Notification Center.
 - **Without the app** (script only, or Linux): a plain `osascript` notification from Script Editor, not clickable. Sound is Glass when the run succeeded, Basso for cancelled runs and problems. Linux gets no notification.
 
 ## The Brew Updates app
 
-A native SwiftUI app in [`app/`](app/) with a menu bar extra and a main window. It never upgrades packages itself. **Update All**, **Dry Run** and **Upgrade Selected** all launch the deployed script, so every run from the app gets the same backup, lock, logs and summary as a scheduled run.
+A native SwiftUI app in [`app/`](app/) with a menu bar extra and a main window. It never upgrades packages itself. **Update All**, **Check for Updates** and **Upgrade Selected** all launch the deployed script, so every run from the app gets the same backup, lock, logs and summary as a scheduled run.
 
 ### Finding what to clean up or replace
 
@@ -308,7 +310,7 @@ From **Installed** you can then uninstall a selection. The app warns when anothe
 | Backups | Compare a Brewfile backup with what's installed or with the previous backup; restore missing taps, formulae and casks |
 | Settings (⌘,) | Schedule on/off, time and days, run flags (rewrites the plist, then reloads). Every `~/.brew_update_config` setting |
 | Menu bar / Dock | Warning icon after a failed run; Dock badge with the update count |
-| Run menu | Dry Run (⇧⌘U), Update All… (⌘U) and Stop (⌘.), also on the toolbar as separate Dry Run and Update All buttons |
+| Run menu | Check for Updates (⇧⌘U), Update All… (⌘U) and Stop (⌘.), also on the toolbar as separate Check for Updates and Update All buttons. Check for Updates runs the script with `--check`: `brew update`, then the outdated list, scans and `brew doctor`, without upgrading anything |
 | Help | A separate Help window (⌘?) explaining each screen |
 | Sidebar footer | App icon, app and script versions; click for About |
 
