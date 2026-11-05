@@ -2,11 +2,21 @@ import SwiftUI
 
 /// Every installed formula and cask in a sortable, searchable table.
 struct InstalledView: View {
+    /// Which type of package to show. Separate from `Filter` so the two combine
+    /// (e.g. Formulae + Requested = what you installed yourself)
+    enum KindFilter: String, CaseIterable, Identifiable {
+        case all = "All"
+        case formulae = "Formulae"
+        case casks = "Casks"
+
+        var id: String { rawValue }
+    }
+
+    /// Which packages to show by status
     enum Filter: String, CaseIterable, Identifiable {
         case all = "All"
         case outdated = "Outdated"
         case requested = "Requested"
-        case casks = "Casks"
 
         var id: String { rawValue }
     }
@@ -15,6 +25,7 @@ struct InstalledView: View {
 
     // `@State` is view-local state: it survives re-renders but belongs to this screen only
     @State private var searchText = ""
+    @State private var kindFilter: KindFilter = .all
     @State private var filter: Filter = .all
     /// A Set because the table allows selecting several rows (⌘-click, ⇧-click)
     @State private var selection: Set<InstalledPackage.ID> = []
@@ -51,11 +62,18 @@ struct InstalledView: View {
         .searchable(text: $searchText, prompt: "Search packages")
         .toolbar {
             ToolbarItem {
-                Picker("Filter", selection: $filter) {
+                Picker("Kind", selection: $kindFilter) {
+                    ForEach(KindFilter.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .help("Show formulae, casks, or both")
+            }
+            ToolbarItem {
+                Picker("Status", selection: $filter) {
                     ForEach(Filter.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .help("Requested: packages you installed yourself, not ones pulled in as dependencies")
+                .help("Requested: packages you installed yourself, not ones pulled in as dependencies (every cask counts)")
             }
             ToolbarItem {
                 Button {
@@ -90,6 +108,7 @@ struct InstalledView: View {
     /// filter or search would hide it
     private func select(_ package: InstalledPackage) {
         if !rows.contains(where: { $0.id == package.id }) {
+            kindFilter = .all
             filter = .all
             searchText = ""
         }
@@ -148,13 +167,19 @@ struct InstalledView: View {
         }
     }
 
+    /// A package is shown only when it passes both pickers
     private func matchesFilter(_ package: InstalledPackage) -> Bool {
-        switch filter {
+        let kindMatches = switch kindFilter {
+        case .all: true
+        case .formulae: package.kind == .formula
+        case .casks: package.kind == .cask
+        }
+        let statusMatches = switch filter {
         case .all: true
         case .outdated: package.isOutdated
         case .requested: package.installedOnRequest
-        case .casks: package.kind == .cask
         }
+        return kindMatches && statusMatches
     }
 
     /// Tooltip for the Date Installed column: what the date means for this kind of package

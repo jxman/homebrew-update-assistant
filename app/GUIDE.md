@@ -448,7 +448,7 @@ The inspector's Dependencies section (`DependenciesSection.swift`) lists package
 links, but selecting a row is `InstalledView`'s job: the table's `selection` is its `@State`.
 So `InstalledView` passes a **closure** down, `select: (InstalledPackage) -> Void`, and each
 link calls `select(package)`. The child doesn't need to know how selecting works (here it
-also switches the filter to All if that package is hidden).
+also switches both filters to All if that package is hidden).
 
 `.id(selected.first?.id)` on the detail view tells SwiftUI that a different package means a
 different view. Without it SwiftUI reuses the same view and keeps its `@State`, so a list
@@ -580,8 +580,9 @@ Small, safe changes for practice. Use previews (⌥⌘↩) to see the result imm
    to `200` or `400` and watch the columns reflow.
 2. **Add a row to the System card.** Add another `GridRow` showing `model.runs.count` as
    "Runs on disk".
-3. **Add a filter.** Add `case pinned = "Pinned"` to `InstalledView.Filter` and handle it in
-   `matchesFilter` (`package.isPinned`). The segmented control picks it up automatically.
+3. **Add a filter.** Add `case pinned = "Pinned"` to `InstalledView.Filter` (the Status
+   picker) and handle it in `matchesFilter` (`package.isPinned`). The segmented control picks
+   it up automatically, and it combines with the Kind picker (All / Formulae / Casks).
 4. **Change colours.** Edit `RunStatus.color` in `Components.swift`, for example make
    `.partial` yellow.
 5. **Write a test.** Add a case to `ScheduleTests` for a monthly schedule
