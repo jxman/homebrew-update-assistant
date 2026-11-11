@@ -397,6 +397,7 @@ Exclusions match exact names (`node` doesn't exclude `node@20`), and pinned form
 │   ├── setup.sh                # Deploy script to ~/bin, install/reload LaunchAgent (--reset-launchagent, --uninstall)
 │   ├── uninstall.sh            # Remove script + LaunchAgent; --logs/--backups/--config/--all, --dry-run
 │   ├── install-app.sh          # Build + sign the app into /Applications (--package → dist/ zip)
+│   ├── smoke-reopen.sh         # Check the installed app's window opens on an icon click after a background launch
 │   └── fix-vulnerabilities.sh  # Upgrade formulae that carry vulnerable dependencies, rescan
 ├── app/
 │   ├── project.yml             # XcodeGen source of truth (BrewUpdates.xcodeproj is generated, gitignored)

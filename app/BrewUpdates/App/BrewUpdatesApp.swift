@@ -61,7 +61,7 @@ struct BrewUpdatesApp: App {
             MenuBarView()
                 .environment(model)
         } label: {
-            MenuBarLabel(model: model)
+            MenuBarLabel(model: model) { appDelegate.openWindow = $0 }
         }
     }
 }

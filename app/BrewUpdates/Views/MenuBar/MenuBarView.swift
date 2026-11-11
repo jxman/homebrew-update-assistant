@@ -4,6 +4,10 @@ import SwiftUI
 /// It turns into arrows while a run is going and a warning triangle when the last run failed.
 struct MenuBarLabel: View {
     let model: AppModel
+    /// Receives SwiftUI's `openWindow` action so `AppDelegate` can open the main window when
+    /// the app's icon is clicked while it's already running
+    var registerOpenWindow: (OpenWindowAction) -> Void = { _ in }
+    @Environment(\.openWindow) private var openWindow
 
     private var icon: String {
         if model.isRunInProgress {
@@ -29,7 +33,10 @@ struct MenuBarLabel: View {
             }
         }
         // Load data even if the main window was closed at launch
-        .task { await model.start() }
+        .task {
+            registerOpenWindow(openWindow)
+            await model.start()
+        }
         // The Dock icon shows the same count. `initial: true` also runs this on first appearance.
         .onChange(of: model.outdatedPackages.count, initial: true) { _, count in
             NSApp.dockTile.badgeLabel = count > 0 ? "\(count)" : nil

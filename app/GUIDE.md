@@ -40,7 +40,7 @@ and run lock. The only direct changes are `brew pin`/`unpin`, the settings in
 
 | Folder | What lives there | Has UI code? |
 |--------|------------------|--------------|
-| `BrewUpdates/App/` | The `@main` entry point (scenes) and `AppDelegate` (Quit confirmation, notification clicks) | Scenes only |
+| `BrewUpdates/App/` | The `@main` entry point (scenes) and `AppDelegate` (Quit confirmation, notification clicks, reopening the window) | Scenes only |
 | `BrewUpdates/State/AppModel.swift` | The single shared state object the screens read, and the actions (run, stop, pin, exclude) | No (but drives the UI) |
 | `BrewUpdates/State/AppModel+*.swift` | The model split by topic: restore and uninstall (`+Packages`), notifications, sidebar sections | No |
 | `BrewUpdates/State/LiveRun.swift`, `DoctorModel.swift`, `SecurityScanModel.swift` | A run started from the app, brew doctor reports plus Check Now, and Scan Now | No |
@@ -340,6 +340,12 @@ SwiftUI has no hook for "the user chose Quit". `@NSApplicationDelegateAdaptor` i
 until the script has stopped. The delegate owns `AppModel`, so the scenes and the quit
 handling share one instance.
 
+The delegate also handles `applicationShouldHandleReopen`, which AppKit calls when the app is
+already running and its icon is clicked again (Dock, Finder, the Desktop alias). AppKit code
+can't call `openWindow` from the environment, so `MenuBarLabel` hands SwiftUI's
+`OpenWindowAction` to the delegate when it appears. The menu bar label exists for the app's
+whole life, unlike the main window.
+
 ### 19. The Settings scene and tabs
 
 `Settings { SettingsView() }` in `BrewUpdatesApp.swift` is a scene like `Window`, but macOS
@@ -541,7 +547,9 @@ What to show comes from the run's summary (`RunNotification`, tested without the
 is kept in `UserDefaults`), if it asked for a notification and finished in the last
 15 minutes. When the app isn't running, the script starts it with `open -g --env
 BREW_UPDATES_BACKGROUND_LAUNCH=1`; `.defaultLaunchBehavior(.suppressed)` on the `Window`
-scene then keeps the main window closed, so only the menu bar icon and the notification appear.
+scene then keeps the main window closed, so only the menu bar icon and the notification appear. `.suppressed` also stops SwiftUI from
+opening the window when the icon is clicked later, so `AppDelegate.applicationShouldHandleReopen`
+opens it (see section 18).
 
 ## Trying the actions safely
 

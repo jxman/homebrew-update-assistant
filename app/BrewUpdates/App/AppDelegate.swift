@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 /// The app's `NSApplicationDelegate`, connected in `BrewUpdatesApp` with
 /// `@NSApplicationDelegateAdaptor`. It owns the shared `AppModel` and handles the few things
@@ -16,6 +17,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         model.notifications.activate()
+    }
+
+    /// SwiftUI's `openWindow` action, handed over by the menu bar label (which exists for the
+    /// app's whole life). AppKit code like this delegate has no other way to open a scene.
+    var openWindow: OpenWindowAction?
+
+    /// Called when the app is already running and its icon is clicked again (Dock, Finder,
+    /// the Desktop alias). When the script started the app in the background, the main window
+    /// is `.suppressed`, which SwiftUI also applies to reopening, so open it ourselves.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard !flag, let openWindow else { return true }
+        openWindow(id: "main")
+        NSApp.activate()
+        // false = we handled it, AppKit/SwiftUI shouldn't do their default
+        return false
     }
 
     /// Quitting closes the script's output pipe, which would kill it mid-upgrade without a
