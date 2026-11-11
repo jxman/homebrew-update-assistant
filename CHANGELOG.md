@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [App 1.4.0] - 2026-11-11
+
+The Installed filter splits into Kind and Status, and clicking the app's icon always opens
+its window. Works with script 2.6.0.
+
+### SwiftUI App
+
+#### Changed
+- Installed: the single filter is now two pickers that combine, **Kind** (All, Formulae,
+  Casks) and **Status** (All, Outdated, Requested). The old one mixed the two, and every cask
+  also matched Requested. Formulae + Requested lists what you installed yourself
+
+#### Fixed
+- Clicking the Desktop alias, Dock or Finder icon while the app was already running showed no
+  window when the script had started the app in the background for a notification (only the
+  menu bar could open it). `.defaultLaunchBehavior(.suppressed)` also blocks reopening, so
+  `AppDelegate.applicationShouldHandleReopen` now opens the main window itself
+
+#### Added
+- `scripts/smoke-reopen.sh` checks this against the installed app: background launch with no
+  window, then an icon click that must show the main window. Run it after `install-app.sh`
+  when launch, window or menu bar code changes, and before tagging a release
+
 ## [App 1.3.0] - 2026-11-03
 
 **Dry Run** becomes **Check for Updates**, which fetches the latest package versions first.
